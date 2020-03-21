@@ -20,7 +20,7 @@ import six
 
 import torch
 import torch.nn as nn
-import q_data_handler as dh
+import qa_data_handler as dh
 
 
 # Evaluation routine
@@ -38,44 +38,53 @@ def generate_response(model, data, batch_indices, vocab, maxlen=20, beam=5, pena
             #summary = dialog['summary']
             result_dialogs.append(pred_dialog)
             for t, qa in enumerate(dialog['dialog']):
-                x_batch, h_batch, q_batch, q_batch_in, q_batch_out, s_batch, summary_batch_in, summary_batch_out = \
-                    dh.make_batch(data, batch_indices[qa_id])
+                x_batch, h_batch, q_batch, a_batch_in, a_batch_out, s_batch, summary_batch_in, summary_batch_out, c_batch = \
+                    dh.make_batch_a(data, batch_indices[qa_id])
+                q_batch_in, q_batch_out, all_a_batch_in, all_q_batch_in = dh.make_batch_q(data, batch_indices[qa_id])
                 qa_id += 1
                 #print("qa_id and h len:",qa_id, len(h_batch))
 
                 if len(h_batch) < 12:
-                    #print("current round given:", len(h_batch))
 
-                    logging.info('%s' % (vid))
-                #logging.info('QS: ' + qa['question'])
-                    logging.info('REF: ' + dialog['summary'])
-                # prepare input data
-                    start_time = time.time()
-                # x_batch, h_batch, q_batch, a_batch_in, a_batch_out, s_batch, summary_batch_in, summary_batch_out = \
-                #     dh.make_batch(data, batch_indices[qa_id])
-                    #qa_id += 1
-                    x = [torch.from_numpy(x) for x in x_batch]
-                    h = [[torch.from_numpy(h) for h in hb] for hb in h_batch]
-                    q = [torch.from_numpy(q) for q in q_batch]
-                    s = torch.from_numpy(s_batch).cuda().float()
-                    smi = [torch.from_numpy(smi) for smi in summary_batch_in]
-                    smo = [torch.from_numpy(smo) for smo in summary_batch_out]
-                    qi = [torch.from_numpy(qi) for qi in q_batch_in]
-                    qo = [torch.from_numpy(qo) for qo in q_batch_out]
-                    #qi = [qi,qi]
-                    #print('qi:', qi)
-
-                    # generate sequences
-                    pred_out, _ = model.generate(x, h, q, s, qi, maxlen=maxlen,
-                                        beam=beam, penalty=penalty, nbest=nbest)
-                    for n in six.moves.range(min(nbest, len(pred_out))):
-                        pred = pred_out[n]
-                        hypstr = ' '.join([vocablist[w] for w in pred[0]])
-                        logging.info('HYP[%d]: %s  ( %f )' % (n + 1, hypstr, pred[1]))
-                        if n==0:
-                            pred_dialog['dialog'][t]['summary'] = hypstr
-                    logging.info('ElapsedTime: %f' % (time.time() - start_time))
-                    logging.info('-----------------------')
+                    if vid == 'J662Y' and len(h_batch) == 7:
+                        logging.info('%s' % (vid))
+                    #logging.info('QS: ' + qa['question'])
+                        logging.info('REF: ' + dialog['summary'])
+                    # prepare input data
+                        start_time = time.time()
+                    # x_batch, h_batch, q_batch, a_batch_in, a_batch_out, s_batch, summary_batch_in, summary_batch_out = \
+                    #     dh.make_batch(data, batch_indices[qa_id])
+                        #qa_id += 1
+                        x = [torch.from_numpy(x) for x in x_batch]
+                        h = [[torch.from_numpy(h) for h in hb] for hb in h_batch]
+                        q = [torch.from_numpy(q) for q in q_batch]
+                        s = torch.from_numpy(s_batch).cuda().float()
+                        smi = [torch.from_numpy(smi) for smi in summary_batch_in]
+                        smo = [torch.from_numpy(smo) for smo in summary_batch_out]
+                        ai = [torch.from_numpy(ai) for ai in a_batch_in]
+                        ao = [torch.from_numpy(ao) for ao in a_batch_out]
+                        qi = [torch.from_numpy(qi) for qi in q_batch_in]
+                        qo = [torch.from_numpy(qo) for qo in q_batch_out]
+                        c = [torch.from_numpy(c) for c in c_batch]
+                        all_ai = [torch.from_numpy(all_ai) for all_ai in all_a_batch_in]
+                        all_qi = [torch.from_numpy(all_qi) for all_qi in all_q_batch_in]
+                        # print('all_ai', all_ai)
+                        # print('all_qi', all_qi)
+                        # #qi = [qi,qi]
+                        #print('qi:', qi)
+                        #print("h in generation:", len(h))
+                        # generate sequences
+                        #if vid == '76Z3W':
+                        pred_out, _ = model.generate(x, h, q, c, s, ai, qi, all_ai, all_qi, maxlen=maxlen,
+                                                beam=beam, penalty=penalty, nbest=nbest)
+                        for n in six.moves.range(min(nbest, len(pred_out))):
+                            pred = pred_out[n]
+                            hypstr = ' '.join([vocablist[w] for w in pred[0]])
+                            logging.info('HYP[%d]: %s  ( %f )' % (n + 1, hypstr, pred[1]))
+                            if n==0:
+                                pred_dialog['dialog'][t]['summary'] = hypstr
+                        logging.info('ElapsedTime: %f' % (time.time() - start_time))
+                        logging.info('-----------------------')
 
     return {'dialogs': result_dialogs}
 
@@ -121,6 +130,11 @@ if __name__ =="__main__":
     path = args.model_conf
     with open(path, 'r') as f:
         vocab, train_args = pickle.load(f)
+
+    # file = open('vocab.txt','w')
+    # file.write(str(vocab))
+    # file.close()
+
     model = torch.load(args.model+'.pth.tar')
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model.to(device)

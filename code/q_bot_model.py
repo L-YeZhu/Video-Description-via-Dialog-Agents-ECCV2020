@@ -9,13 +9,13 @@ import six
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from atten import Atten, NaiveAttention, H_Q_Attention
+from atten import Atten, NaiveAttention, H_Q_Attention_q, H_Q_Attention_a, H_Q_Attention_g
 torch.manual_seed(1)
 
 
 class MMSeq2SeqModel(nn.Module):
 
-    def __init__(self, mm_encoder, history_encoder, input_encoder, response_decoder):
+    def __init__(self, mm_encoder, history_encoder, input_encoder, response_decoder, summary_decoder):
         """ Define model structure
             Args:
                 history_encoder (~chainer.Chain): history encoder network
@@ -27,6 +27,7 @@ class MMSeq2SeqModel(nn.Module):
         self.mm_encoder = mm_encoder
         self.input_encoder = input_encoder
         self.response_decoder = response_decoder
+        self.summary_decoder = summary_decoder
         q_embed = 256
         self.s_embed = 256
         self.a_embed = 256
@@ -37,17 +38,23 @@ class MMSeq2SeqModel(nn.Module):
 
         self.emb_s = nn.Conv1d(512, self.s_embed, 1)
         self.emb_a = nn.Conv1d(128, self.a_embed, 1)
-        self.emb_temporal_sp = nn.LSTM(self.s_embed, self.s_embed, dropout=0.5, batch_first=True)
+        self.emb_temporal_sp = nn.LSTM(self.s_embed, 128, dropout=0.5, batch_first=True)
 
         #self.atten = NaiveAttention()
-        self.atten = Atten(util_e=[self.s_embed, self.s_embed], high_order_utils=high_order_utils,
-                           prior_flag=True, sizes=[49, 49], size_flag=False, pairwise_flag=True, unary_flag=True, self_flag=True)
+        self.atten = Atten(util_e=[self.s_embed, self.s_embed, 128], high_order_utils=high_order_utils,
+                           prior_flag=True, sizes=[49, 49, 10], size_flag=False, pairwise_flag=True, unary_flag=True, self_flag=True)
+
+        self.atten2 = Atten(util_e=[128, 128], high_order_utils=high_order_utils,
+                           prior_flag=True, sizes=[10, 10], size_flag=False, pairwise_flag=True, unary_flag=True, self_flag=True)
+
+        #self.atten2 = Atten(util_e=[128, 128], high_order_utils=high_order_utils,
+                   # prior_flag=True, sizes=[10, 10], size_flag=False, pairwise_flag=True, unary_flag=True, self_flag=True)
 
         #EXPERIMENTS
         # self.atten_test = H_Q_Attention()
 
 
-    def loss(self, mx, hx, x, y, t, s):
+    def loss(self, mx, hx, x, y_q, y_s, t_q, t_s, s):
         """ Forward propagation and loss calculation
             Args:
                 es (pair of ~chainer.Variable): encoder state
@@ -88,7 +95,8 @@ class MMSeq2SeqModel(nn.Module):
 
         eh_temp, eh = self.history_encoder(None, hx)
 
-        ei = self.atten(utils=[s[0], s[3]], priors=[None, None])
+        #ei = self.atten(utils=[s[0], s[3]], priors=[None, None])
+        ei = self.atten(utils=[s[0], s[3], eh_temp], priors=[None, None, None])
 
         #a_q: attended question embeding
         #a_q = ei[0]
@@ -104,7 +112,7 @@ class MMSeq2SeqModel(nn.Module):
 
         a_a_s = torch.cat([u.unsqueeze(1) for u in a_s], dim=1)
         _, hidden_temporal_state = self.emb_temporal_sp(a_a_s)
-        eh_temp, eh = self.history_encoder(None, hx)
+        #eh_temp, eh = self.history_encoder(None, hx)
         #print("history embedding:", eh_temp.size(), eh.size()) #is (1, 64, 128)
 
 
@@ -112,22 +120,57 @@ class MMSeq2SeqModel(nn.Module):
         #print("check atten_test:", test_att_out, test_att_out.size())
 
         # concatenate encodings
+        #es = ei[2]
+        #print("es size:", es.size())
         es = eh.squeeze()
-        #print("eh size:", es.size())
+        #print("eh size in training:", es.size())
 
         # es = torch.cat((eh[-1]), dim=1)
         # es = torch.cat((a_q, test_att_out[-1]), dim=1)
         # print("es dim before decoder:", es.size())
-        if hasattr(self.response_decoder, 'context_to_state') \
-            and self.response_decoder.context_to_state==True:
-            ds, dy = self.response_decoder(es, None, y)
+#         #print("y_q in training:", y_q)
+#         if hasattr(self.response_decoder, 'context_to_state') \
+#             and self.response_decoder.context_to_state==True:
+#             ds, dy, y_s_test = self.response_decoder(es, None, y_q)
+#         else:
+#             # decode
+#             ds, dy, y_s_test = self.response_decoder(hidden_temporal_state, es, y_q)
+
+#         # # compute loss
+#         # if t_q is not None:
+#         #     tt = torch.cat(t_q, dim=0)
+#         #     loss = F.cross_entropy(dy, torch.tensor(tt, dtype=torch.long).cuda())
+#         #     #max_index = dy.max(dim=1)[1]
+#         #     #hit = (max_index == torch.tensor(tt, dtype=torch.long).cuda()).sum()
+#         #     return None, ds, loss
+#         # else:  # if target is None, it only returns states
+#         #     return None, ds
+
+# ##########################################################################################
+        
+#         #print("y_s size in training:", y_s_test.size())
+
+#         ei = self.atten2(utils=[eh_temp, y_s_test], priors=[None, None])
+
+#         ei_dialog = ei[0]
+#         ei_ques = ei[1]
+
+#         #print("ei_dialog and ei_ques size:", ei_dialog.size(), ei_ques.size())
+
+#         es_round = torch.cat((ei_dialog, ei_ques), dim=1)
+
+        #print("es_round size:", es_round.size())
+
+
+        if hasattr(self.summary_decoder, 'context_to_state') \
+            and self.summary_decoder.context_to_state==True:
+            ds, dy = self.summary_decoder(es, None, y_s)
         else:
             # decode
-            ds, dy = self.response_decoder(hidden_temporal_state, es, y)
+            ds, dy = self.summary_decoder(hidden_temporal_state, es, y_s)
 
-        # compute loss
-        if t is not None:
-            tt = torch.cat(t, dim=0)
+        if t_s is not None:
+            tt = torch.cat(t_s, dim=0)
             loss = F.cross_entropy(dy, torch.tensor(tt, dtype=torch.long).cuda())
             #max_index = dy.max(dim=1)[1]
             #hit = (max_index == torch.tensor(tt, dtype=torch.long).cuda()).sum()
@@ -135,7 +178,8 @@ class MMSeq2SeqModel(nn.Module):
         else:  # if target is None, it only returns states
             return None, ds
 
-    def generate(self, mx, hx, x, s, sos=2, eos=2, unk=0, minlen=1, maxlen=100, beam=5, penalty=1.0, nbest=1):
+
+    def generate(self, mx, hx, x, s, y_q, sos=2, eos=2, unk=0, minlen=1, maxlen=100, beam=5, penalty=1.0, nbest=1):
         """ Generate sequence using beam search
             Args:
                 es (pair of ~chainer.Variable(s)): encoder state
@@ -173,7 +217,8 @@ class MMSeq2SeqModel(nn.Module):
 
         eh_temp, eh = self.history_encoder(None, hx)
 
-        ei = self.atten(utils=[s[0], s[3]], priors=[None, None])
+        #ei = self.atten(utils=[s[0], s[3]], priors=[None, None])
+        ei = self.atten(utils=[s[0], s[3], eh_temp], priors=[None, None, None])
 
         #a_q = ei[0]
         a_s = [ei[0], ei[1]]
@@ -188,11 +233,33 @@ class MMSeq2SeqModel(nn.Module):
 
         # concatenate encodings
         # es = torch.cat((eh[-1]), dim=1)
-        es = eh.squeeze()
-        # es = torch.cat((a_q, test_att_out[-1]), dim=1)
+        es = eh.squeeze(0)
+        # es = torch.squeeze(eh, 0)
+        #es = ei[2]
+        # ds = self.response_decoder.initialize(hidden_temporal_state, es, torch.from_numpy(np.asarray([sos])).cuda())
+        #print("y_q in generation:", y_q)
+        # if hasattr(self.response_decoder, 'context_to_state') \
+        #     and self.response_decoder.context_to_state==True:
+        #     y_s_test = self.response_decoder(es, None, y_q)
+        # else:
+        #     # decode
+        #     y_s_test = self.response_decoder(hidden_temporal_state, es, y_q)
+        # y_s_test = torch.unsqueeze(y_s_test, 0)
+        # #print("y_s size in generation:", y_s_test.size(), y_s_test)
+        # #print("eh_temp size in generation:", eh_temp.size())
+        # #y_s_test = 
+
+        # ei = self.atten2(utils=[eh_temp, y_s_test], priors=[None, None])
+
+        # ei_dialog = ei[0]
+        # ei_ques = ei[1]
+
+        #print("ei_dialog and ei_ques size:", ei_dialog.size(), ei_ques.size())
+
+        # es_round = torch.cat((ei_dialog, ei_ques), dim=1)
 
         # beam search
-        ds = self.response_decoder.initialize(hidden_temporal_state, es, torch.from_numpy(np.asarray([sos])).cuda())
+        ds = self.summary_decoder.initialize(hidden_temporal_state, es, torch.from_numpy(np.asarray([sos])).cuda())
         hyplist = [([], 0., ds)]
         best_state = None
         comp_hyplist = []
@@ -200,12 +267,12 @@ class MMSeq2SeqModel(nn.Module):
             new_hyplist = []
             argmin = 0
             for out, lp, st in hyplist:
-                logp = self.response_decoder.predict(st)
+                logp = self.summary_decoder.predict(st)
                 lp_vec = logp.cpu().data.numpy() + lp
                 lp_vec = np.squeeze(lp_vec)
                 if l >= minlen:
                     new_lp = lp_vec[eos] + penalty * (len(out) + 1)
-                    new_st = self.response_decoder.update(st, torch.from_numpy(np.asarray([eos])).cuda())
+                    new_st = self.summary_decoder.update(st, torch.from_numpy(np.asarray([eos])).cuda())
                     comp_hyplist.append((out, new_lp))
                     if best_state is None or best_state[0] < new_lp:
                         best_state = (new_lp, new_st)
@@ -216,13 +283,13 @@ class MMSeq2SeqModel(nn.Module):
                     new_lp = lp_vec[o]
                     if len(new_hyplist) == beam:
                         if new_hyplist[argmin][1] < new_lp:
-                            new_st = self.response_decoder.update(st, torch.from_numpy(np.asarray([o])).cuda())
+                            new_st = self.summary_decoder.update(st, torch.from_numpy(np.asarray([o])).cuda())
                             new_hyplist[argmin] = (out + [o], new_lp, new_st)
                             argmin = min(enumerate(new_hyplist), key=lambda h: h[1][1])[0]
                         else:
                             break
                     else:
-                        new_st = self.response_decoder.update(st, torch.from_numpy(np.asarray([o])).cuda())
+                        new_st = self.summary_decoder.update(st, torch.from_numpy(np.asarray([o])).cuda())
                         new_hyplist.append((out + [o], new_lp, new_st))
                         if len(new_hyplist) == beam:
                             argmin = min(enumerate(new_hyplist), key=lambda h: h[1][1])[0]

@@ -280,32 +280,131 @@ class NaiveAttention(nn.Module):
 
 
 
-class H_Q_Attention(nn.Module):
+class H_Q_Attention_q(nn.Module):
     def __init__(self):
-        super(H_Q_Attention, self).__init__()
+        super(H_Q_Attention_q, self).__init__()
         self.lin = nn.Linear(256, 128)
 
     def forward(self, h_e, q_a):
         # h_e dim: [64, 2, 256]
         # q_a dim: [64, 256]
-        atten = []
+        #atten = []
         #h_e.transpose(1,2)
-        #print(h_e.size())
+        #print("q_a and h_e size in q bot:",q_a.size(), h_e.size())
+        _, pair_n, _ = q_a.size()
+        # for pair_id in range(pair_n):
+        #     pair_temp = h_e[:,pair_id,:]
+        #     print("pair_temp size",pair_temp.size())
+        #     print("q_a size", q_a.size())
+        #     test_weight = torch.bmm(q_a.view(64,1,256), pair_temp.view(64,256,1))
+        #q_a = self.lin(q_a)
+
+        #print("q_a and h_e size:",q_a.size(), h_e.size())
+
+        test_weight = torch.bmm(q_a.view(-1,pair_n,128), h_e.transpose(1,2))
+
+        #test_weight = F.softmax(test_weight, dim=0)
+        test_out = torch.bmm(test_weight, h_e)
+
+        #test_out = self.lin(test_out)
+        test_out = test_out.transpose(0,1)
+        soft = nn.Softmax()
+        return soft(test_out)
+
+
+class H_Q_Attention_g(nn.Module):
+    def __init__(self):
+        super(H_Q_Attention_g, self).__init__()
+        self.lin = nn.Linear(256, 128)
+
+    def forward(self, h_e, q_a):
+        # h_e dim: [64, 2, 256]
+        # q_a dim: [64, 256]
+        #atten = []
+        #h_e.transpose(1,2)
+        #print("q_a and h_e size in q bot:",q_a.size(), h_e.size())
+        # _, pair_n, _ = q_a.size()
+        # for pair_id in range(pair_n):
+        #     pair_temp = h_e[:,pair_id,:]
+        #     print("pair_temp size",pair_temp.size())
+        #     print("q_a size", q_a.size())
+        #     test_weight = torch.bmm(q_a.view(64,1,256), pair_temp.view(64,256,1))
+        #q_a = self.lin(q_a)
+
+        #print("q_a and h_e size:",q_a.size(), h_e.size())
+
+        test_weight = torch.bmm(q_a, h_e.transpose(1,2))
+
+        #test_weight = F.softmax(test_weight, dim=0)
+        test_out = torch.bmm(test_weight, h_e)
+
+        #test_out = self.lin(test_out)
+        test_out = test_out.transpose(0,1)
+        soft = nn.Softmax()
+        return soft(test_out)
+
+
+class H_Q_Attention_a(nn.Module):
+    def __init__(self):
+        super(H_Q_Attention_a, self).__init__()
+        self.lin = nn.Linear(256, 128)
+
+    def forward(self, h_e, q_a):
+        # h_e dim: [64, 2, 256]
+        # q_a dim: [64, 256]
+        #atten = []
+        #h_e.transpose(1,2)
+        #print("q_a and h_e size in a bot:",q_a.size(), h_e.size())
         _, pair_n, _ = h_e.size()
         # for pair_id in range(pair_n):
         #     pair_temp = h_e[:,pair_id,:]
         #     print("pair_temp size",pair_temp.size())
         #     print("q_a size", q_a.size())
         #     test_weight = torch.bmm(q_a.view(64,1,256), pair_temp.view(64,256,1))
-
-        test_weight = torch.bmm(q_a.view(-1,1,256), h_e.transpose(1,2))
+        q_a = self.lin(q_a)
+        #print("q_a and h_e size:",q_a.size(), h_e.size())
+        #print("check size:", q_a.view(-1,1,128).size(), h_e.transpose(1,2).size())
+        test_weight = torch.bmm(q_a.view(-1,1,128), h_e.transpose(1,2))
+        #print("check size:", q_a.view(-1,1,256).size(), h_e.transpose(1,2), test_weight.size(), test_out.size())
 
         #test_weight = F.softmax(test_weight, dim=0)
         test_out = torch.bmm(test_weight, h_e)
-
-        test_out = self.lin(test_out)
+        #print("check size:", q_a.view(-1,1,256).size(), h_e.transpose(1,2), test_weight.size(), test_out.size())
+        #test_out = self.lin(test_out)
         test_out = test_out.transpose(0,1)
 
+        soft = nn.Softmax()
+
+        return soft(test_out)
 
 
-        return test_out
+class IM_Attention(nn.Module):
+    def __init__(self):
+        super(IM_Attention, self).__init__()
+
+    def forward(self, s1, s2):
+        # h_e dim: [64, 2, 256]
+        # q_a dim: [64, 256]
+        #atten = []
+        #h_e.transpose(1,2)
+        #print("q_a and h_e size in a bot:",q_a.size(), h_e.size())
+        n1, n2 = s1.size()
+        # for pair_id in range(pair_n):
+        #     pair_temp = h_e[:,pair_id,:]
+        #     print("pair_temp size",pair_temp.size())
+        #     print("q_a size", q_a.size())
+        #     test_weight = torch.bmm(q_a.view(64,1,256), pair_temp.view(64,256,1))
+        print("s1 and s2 size:",s1.size(), s2.size())
+
+        test_weight = torch.bmm(s1.view(-1,1,n2), s2.view(-1,1,n2))
+
+        #test_weight = F.softmax(test_weight, dim=0)
+        #test_out = torch.bmm(test_weight, h_e)
+
+        #test_out = self.lin(test_out)
+        #test = torch.bmm(s1,s2)
+        #test_out = test_out.transpose(0,1)
+
+        soft = nn.Softmax()
+
+        return soft(test_out)

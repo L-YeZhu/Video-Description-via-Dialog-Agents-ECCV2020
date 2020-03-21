@@ -315,7 +315,7 @@ if __name__ == "__main__":
             data_time.update(time.time() - end)
             # get fetched batch
             x_batch, h_batch, q_batch, a_batch_in, a_batch_out, s_batch = batch.pop()
-            print("history batch len:", len(h_batch))
+            #print("history batch len:", len(h_batch))
             # fetch the next batch in parallel
             if j < len(train_indices) - 1:
                 prefetch = threading.Thread(target=fetch_batch,

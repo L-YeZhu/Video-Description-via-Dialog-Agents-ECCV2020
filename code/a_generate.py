@@ -20,7 +20,7 @@ import six
 
 import torch
 import torch.nn as nn
-import q_data_handler as dh
+import a_data_handler as dh
 
 
 # Evaluation routine
@@ -38,13 +38,12 @@ def generate_response(model, data, batch_indices, vocab, maxlen=20, beam=5, pena
             #summary = dialog['summary']
             result_dialogs.append(pred_dialog)
             for t, qa in enumerate(dialog['dialog']):
-                x_batch, h_batch, q_batch, q_batch_in, q_batch_out, s_batch, summary_batch_in, summary_batch_out = \
+                x_batch, h_batch, q_batch, a_batch_in, a_batch_out, s_batch, summary_batch_in, summary_batch_out, c_batch = \
                     dh.make_batch(data, batch_indices[qa_id])
                 qa_id += 1
                 #print("qa_id and h len:",qa_id, len(h_batch))
 
                 if len(h_batch) < 12:
-                    #print("current round given:", len(h_batch))
 
                     logging.info('%s' % (vid))
                 #logging.info('QS: ' + qa['question'])
@@ -60,13 +59,14 @@ def generate_response(model, data, batch_indices, vocab, maxlen=20, beam=5, pena
                     s = torch.from_numpy(s_batch).cuda().float()
                     smi = [torch.from_numpy(smi) for smi in summary_batch_in]
                     smo = [torch.from_numpy(smo) for smo in summary_batch_out]
-                    qi = [torch.from_numpy(qi) for qi in q_batch_in]
-                    qo = [torch.from_numpy(qo) for qo in q_batch_out]
+                    ai = [torch.from_numpy(ai) for ai in a_batch_in]
+                    ao = [torch.from_numpy(ao) for ao in a_batch_out]
+                    c = [torch.from_numpy(c) for c in c_batch]
                     #qi = [qi,qi]
                     #print('qi:', qi)
 
                     # generate sequences
-                    pred_out, _ = model.generate(x, h, q, s, qi, maxlen=maxlen,
+                    pred_out, _ = model.generate(x, h, c, s, maxlen=maxlen,
                                         beam=beam, penalty=penalty, nbest=nbest)
                     for n in six.moves.range(min(nbest, len(pred_out))):
                         pred = pred_out[n]

@@ -1,8 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Multimodal sequence-to-sequence model module
-   Adapted from 2018 Mitsubishi Electric Research Labs
-   Used in: A Simple Baseline for Audio-Visual Scene-Aware Dialog
-   https://arxiv.org/abs/1904.05876v1
+"""Dialog agents for AVSD
 """
 
 import sys
@@ -12,7 +9,7 @@ import six
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from atten import Atten, NaiveAttention, H_Q_Attention
+from atten import Atten, NaiveAttention, H_Q_Attention_a
 torch.manual_seed(1)
 
 
@@ -30,6 +27,7 @@ class MMSeq2SeqModel(nn.Module):
         self.mm_encoder = mm_encoder
         self.input_encoder = input_encoder
         self.response_decoder = response_decoder
+        #self.summary_decoder = summary_decoder
         q_embed = 256
         self.s_embed = 256
         self.a_embed = 256
@@ -42,33 +40,19 @@ class MMSeq2SeqModel(nn.Module):
         self.emb_a = nn.Conv1d(128, self.a_embed, 1)
         self.emb_temporal_sp = nn.LSTM(self.s_embed, self.s_embed, dropout=0.5, batch_first=True)
 
-        # self.trn_video = self.videoTRN()
-
-
         #self.atten = NaiveAttention()
-        self.atten = Atten(util_e=[q_embed, self.s_embed, self.s_embed, self.s_embed, self.s_embed, self.a_embed], high_order_utils=high_order_utils,
-                           prior_flag=True, sizes=[10, 49, 49, 49, 49, 10], size_flag=False, pairwise_flag=True, unary_flag=True, self_flag=True)
+        self.atten = Atten(util_e=[q_embed, self.s_embed, self.s_embed,self.s_embed, self.s_embed, self.a_embed, 128], high_order_utils=high_order_utils,
+                           prior_flag=True, sizes=[10, 49, 49, 49, 49, 10, 10], size_flag=False, pairwise_flag=True, unary_flag=True, self_flag=True)
 
         #EXPERIMENTS
-        # self.atten_test = H_Q_Attention()
+        self.atten_test = H_Q_Attention_a()
 
-    ##TRN module
-    # def videoTRN(self):
-    #     trn_video = nn.Sequential(
-    #         nn.ReLU(),
-    #         nn.Linear(4*49*512, 4*49*256),
-    #         # nn.ReLU(),
-    #         # nn.Linear(4*49*512, 4*49*256),
-    #         # nn.ReLU(),
-    #         # nn.Linear(4*49*256, 4*49*256),
-    #         )
-    #     return trn_video
 
-    def loss(self, mx, hx, x, y, t, s):
+    def loss(self, mx, hx, x, y_a, y_s, t_a, t_s, s):
         """ Forward propagation and loss calculation
             Args:
                 es (pair of ~chainer.Variable): encoder state
-                x (list of ~chainer.Variable): list of input sequences
+                x (list of ~chainer.Variable): list of input sequences - question
                 y (list of ~chainer.Variable): list of output sequences
                 t (list of ~chainer.Variable): list of target sequences
                                    if t is None, it returns only states
@@ -78,31 +62,20 @@ class MMSeq2SeqModel(nn.Module):
                 loss (~chainer.Variable) : cross-entropy loss
         """
         # encode
-        #print("s dim in loss function:", s.size())
+
         ei, ei_len = self.input_encoder(None, x)
-        #print("question embedding before attention:", ei.size())
-        #print("question embedding example:", ei[0,:,:])
+        # print("question embedding before attention:", ei.size())
+        # print("question embedding example:", ei[0,:,:])
 
         q_prior = torch.zeros(ei.size(0), ei.size(1)).cuda()
         idx = torch.from_numpy(ei_len - 1).long().cuda()
         batch_index = torch.arange(0, ei_len.shape[0]).long().cuda()
         q_prior[batch_index, idx] = 1
-        num_samples = s.shape[0]
-
-        # #################################################################
-        # # TRN test block
-        # s = s.view(64, -1)
-        # print("size check before TRN:", s.size())
-        # s = self.trn_video(s)
-        # print("size check after TRN:", s.size())
-        # s = s.view(4, 64, 49, -1)
-        # print("size check before Attention:", s.size())
-
+        num_samples = s.shape[0] #should be 2
 
 
         # #################################################################
-        # print("num_samples:", num_samples) is 4 (4 frames)
-        # print("s shape 1:", s.size()) is (4, 64, 49, 512)
+        # print("s shape 1:", s.size()) is (2, 64, 49, 512)
         s = s.view(-1, s.size(2), s.size(3)).transpose(1, 2)
         # print("s shape 2:", s.size()) is (256 = 4*64 , 512, 49)
         s = self.emb_s(s)
@@ -113,15 +86,14 @@ class MMSeq2SeqModel(nn.Module):
         # print("visual embedding before attention:", s.size()) is (4, 64, 49, 256)
 
         # ##########################################################################
-
         a = mx[0].cuda().permute(1, 2, 0)
         a = self.emb_a(a)
         a = a.transpose(1, 2)
-        #print("audio embedding before attention:", a.size())
-        #print("audio embedding example:", a[1,:,:])
+
         eh_temp, eh = self.history_encoder(None, hx)
 
-        ei = self.atten(utils=[ei, s[0], s[1], s[2], s[3], a], priors=[q_prior, None, None, None, None, None])
+        #ei = self.atten(utils=[s[0], s[3]], priors=[None, None])
+        ei = self.atten(utils=[ei, s[0], s[1], s[2], s[3], a, eh_temp], priors=[q_prior, None, None, None, None, None, None])
 
         #a_q: attended question embeding
         a_q = ei[0]
@@ -132,32 +104,39 @@ class MMSeq2SeqModel(nn.Module):
         #a_a: attended audio embedding
         a_a = ei[5]
         #print("audio embedding after attention:", a_a.size())
-        #a_h = ei[6].unsqueeze(0)
-        #print("history after attention dim:", a_h.size())
+        a_h = ei[6].unsqueeze(0)
+        #print("a_h and eh dim:", a_h.size(), eh.size())
 
         a_a_s = torch.cat([a_a.unsqueeze(1)] + [u.unsqueeze(1) for u in a_s], dim=1)
         _, hidden_temporal_state = self.emb_temporal_sp(a_a_s)
-        # eh_temp, eh = self.history_encoder(None, hx)
+        #eh_temp, eh = self.history_encoder(None, hx)
         #print("history embedding:", eh_temp.size(), eh.size()) #is (1, 64, 128)
 
 
-        # test_att_out = self.atten_test(eh_temp, a_q)
+        test_att_out = self.atten_test(eh_temp, a_q)
         #print("check atten_test:", test_att_out, test_att_out.size())
 
         # concatenate encodings
+        # es = ei[6]
+        #print("es size:", es.size())
+        # es = a_h.squeeze()
+        #es = a_q
+        #es = torch.cat((a_q, test_att_out[-1]), dim=1)
+        ## caption + his_with_att
+        #es = torch.cat((a_q, a_h[-1]), dim=1)
         es = torch.cat((a_q, eh[-1]), dim=1)
-        # es = torch.cat((a_q, test_att_out[-1]), dim=1)
-        #print("es dim before decoder in training:", es.size())
+
+        #print("es dim before decoder:", es.size())
         if hasattr(self.response_decoder, 'context_to_state') \
             and self.response_decoder.context_to_state==True:
-            ds, dy = self.response_decoder(es, None, y)
+            ds, dy = self.response_decoder(es, None, y_s)
         else:
             # decode
-            ds, dy = self.response_decoder(hidden_temporal_state, es, y)
+            ds, dy = self.response_decoder(hidden_temporal_state, es, y_s)
 
         # compute loss
-        if t is not None:
-            tt = torch.cat(t, dim=0)
+        if t_s is not None:
+            tt = torch.cat(t_s, dim=0)
             loss = F.cross_entropy(dy, torch.tensor(tt, dtype=torch.long).cuda())
             #max_index = dy.max(dim=1)[1]
             #hit = (max_index == torch.tensor(tt, dtype=torch.long).cuda()).sum()
@@ -203,12 +182,13 @@ class MMSeq2SeqModel(nn.Module):
 
         eh_temp, eh = self.history_encoder(None, hx)
 
-        ei = self.atten(utils=[ei, s[0], s[1], s[2], s[3], a], priors=[q_prior, None, None, None, None, None])
+        #ei = self.atten(utils=[s[0], s[3]], priors=[None, None])
+        ei = self.atten(utils=[ei, s[0], s[1], s[2], s[3], a, eh_temp], priors=[q_prior, None, None, None, None, None, None])
 
         a_q = ei[0]
         a_s = [ei[1], ei[2], ei[3], ei[4]]
         a_a = ei[5]
-        #a_h = ei[6].unsqueeze(0)
+        a_h = ei[6].unsqueeze(0)
 
         a_a_s = torch.cat([a_a.unsqueeze(1)] + [u.unsqueeze(1) for u in a_s], dim=1)
         _, hidden_temporal_state = self.emb_temporal_sp(a_a_s)
@@ -217,9 +197,14 @@ class MMSeq2SeqModel(nn.Module):
         #test_att_out = self.atten_test(eh_temp, a_q)
 
         # concatenate encodings
+        # es = torch.cat((eh[-1]), dim=1)
+        # es = a_h.squeeze(0)
+        # es = torch.squeeze(eh, 0)
+        # es = ei[6]
+        #print("es size in generation:", es.size())
         es = torch.cat((a_q, eh[-1]), dim=1)
-        print("es size in generation:", es.size())
-        # es = torch.cat((a_q, test_att_out[-1]), dim=1)
+        #es = torch.cat((a_q, a_h[-1]), dim=1)
+        #es = a_q
 
         # beam search
         ds = self.response_decoder.initialize(hidden_temporal_state, es, torch.from_numpy(np.asarray([sos])).cuda())

@@ -11,7 +11,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import six
 import scipy.io as sio
-from atten import H_Q_Attention
+#from atten import H_Q_Attention
 
 class HLSTMEncoder(nn.Module):
 
@@ -28,7 +28,7 @@ class HLSTMEncoder(nn.Module):
         self.embed = nn.Embedding(in_size, embed_size) if embed is None else embed
         self.wlstm = nn.LSTM(embed_size,hidden_size,n_wlayers,dropout,batch_first=True)
         self.slstm = nn.LSTM(hidden_size,out_size,n_slayers,dropout,batch_first=True)
-        self.atten = H_Q_Attention()
+        #self.atten = H_Q_Attention()
 
         self.independent = independent
 

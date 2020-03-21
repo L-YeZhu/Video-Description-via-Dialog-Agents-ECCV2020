@@ -11,7 +11,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import six
 
-class HLSTMDecoder(nn.Module):
+class Question_HLSTMDecoder(nn.Module):
 
     frame_based = False
     take_all_states = False
@@ -28,14 +28,14 @@ class HLSTMDecoder(nn.Module):
             proj_size (int) : Dimensionality of projection before softmax.
             dropout (float): Dropout ratio.
         """
-        super(HLSTMDecoder, self).__init__()
+        super(Question_HLSTMDecoder, self).__init__()
         self.embed = nn.Embedding(in_size, embed_size) if embed is None else embed
         #self.lstm = nn.LSTM(embed_size+in_size_hier,hidden_size,n_layers,dropout,batch_first=True)
-        self.lstm = nn.LSTM(640,hidden_size,n_layers,dropout,batch_first=True)
+        self.lstm = nn.LSTM(256,hidden_size,n_layers,dropout,batch_first=True)
         self.proj = nn.Linear(hidden_size, proj_size)
         self.out = nn.Linear(proj_size, out_size)
         self.lin = nn.Linear(256,128)
-        #self.out_g = nn.Linear(128, out_size)
+        self.out_g = nn.Linear(128, out_size)
 
         self.n_layers = n_layers
         self.dropout = dropout
@@ -60,17 +60,15 @@ class HLSTMDecoder(nn.Module):
  
         """
 
-        if len(xs) > 1:
+        if len(xs) >= 1:
             sections = np.array([len(x) for x in xs], dtype=np.int32)
             aa = torch.cat(xs, 0)
             bb = self.embed(torch.tensor(aa, dtype=torch.long).cuda())
             cc = sections.tolist()
             hx = torch.split(bb, cc, dim=0)
         else:
-            sections = np.array([len(x) for x in xs], dtype=np.int32)
-            xs[0] = torch.tensor(xs[0], dtype=torch.long).cuda()
             hx = [self.embed(xs[0])]
-                #print("hx_temp size:", hx_temp.size())
+            #print("hx_temp size:", hx_temp.size())
             #print(hs.shape, len(hx), [e.shape for e in hx])
             #exit(1)
         hxc = [ torch.cat((hx[i], hs[i].repeat(hx[i].shape[0], 1)), dim=1) for i in six.moves.range(len(hx))]
@@ -84,27 +82,22 @@ class HLSTMDecoder(nn.Module):
         packed_hxc = nn.utils.rnn.pack_padded_sequence(padded_hxc, list(cc.data), batch_first=True)
         if s is None or (hasattr(self, 'independent') and self.independent):
             ys, (hy, cy) = self.lstm(packed_hxc)
-            #print("check 1",ys.size())
         else:
             ys, (hy, cy) = self.lstm(packed_hxc, s)
-            #print("check 2",ys.size())
 
-        
-        ys = nn.utils.rnn.pad_packed_sequence(ys, batch_first=True)[0]
         #print("ys size:", ys.size())
+        ys = nn.utils.rnn.pad_packed_sequence(ys, batch_first=True)[0]
+        #xs[0] = torch.tensor(xs[0], dtype=torch.long).cuda()
         ys_q = self.lin(ys)
-        #print("ys_q size:", ys_q.size())
         # for i in range(len(xs)):
         #     xs[i] = torch.tensor(xs[i], dtype=torch.long).cuda()
         #     ys_q_i = self.embed(xs[i])
-        #     print("ys_q_i",ys_q_i.size())
         #     ys_q_i= ys_q_i.unsqueeze(0)
-        #     print("ys_q_i",ys_q_i.size())
         #     if i == 0:
         #         ys_q = ys_q_i
         #     else:
         #         ys_q = torch.cat((ys_q, ys_q_i),dim=0)
-        #print("ys size:", ys.size())
+        #print("ys size in training:", ys.size())
         # restore the sorting
         cc2, perm_index2 = torch.sort(perm_index, 0)
         odx = perm_index2.view(-1, 1).unsqueeze(1).expand(ys.size(0), ys.size(1), ys.size(2))
@@ -122,13 +115,9 @@ class HLSTMDecoder(nn.Module):
         #     xs[0] = torch.tensor(xs[0], dtype=torch.long).cuda()
         #     hx = [ self.embed(xs[0]) ]
         #     ys_q = self.embed(xs[0])
-        #     #print("ys_q size:", ys_q.size())
-        #     #y = self.out_g(ys_q.unsqueeze(0))
-        #     # print("xs",xs)
-        #     # print(ys_q.size())
-        #     # y = self.out(self.proj(hx, p=self.dropout))
-        #     #print("y:", y.size())
-        #     return  y, ys_q
+        #     y = self.out_g(ys_q.unsqueeze(0))
+        #     #print("ys size in testing:", ys.size())
+        #     return y, ys_q
 
 
     # interface for beam search

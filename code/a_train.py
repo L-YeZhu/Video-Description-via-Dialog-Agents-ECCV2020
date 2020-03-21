@@ -18,12 +18,12 @@ import threading
 
 import torch
 
-import q_data_handler as dh
+import a_data_handler as dh
 
-from q_bot_model import MMSeq2SeqModel
+from a_bot_model import MMSeq2SeqModel
 from lstm_encoder import LSTMEncoder
 from hlstm_encoder import HLSTMEncoder
-from q_summary_decoder import Summary_HLSTMDecoder
+from a_summary_decoder import Summary_HLSTMDecoder
 from hlstm_decoder import HLSTMDecoder
 #from reasoning import VideoRelationModule
 
@@ -80,7 +80,7 @@ def evaluate(model, data, indices):
         # evaluation loop
         for j in six.moves.range(len(indices)):
             # get a fetched batch
-            x_batch, h_batch, q_batch, q_batch_in, q_batch_out, s_batch, summary_batch_in, summary_batch_out = batch.pop()
+            x_batch, h_batch, q_batch, a_batch_in, a_batch_out, s_batch, summary_batch_in, summary_batch_out, c_batch = batch.pop()
             # fetch the next batch in parallel
             if j < len(indices) - 1:
                 prefetch = threading.Thread(target=fetch_batch,
@@ -90,15 +90,15 @@ def evaluate(model, data, indices):
             if len(h_batch) < 12:
                 x = [torch.from_numpy(x) for x in x_batch]
                 h = [[torch.from_numpy(h) for h in hb] for hb in h_batch]
-                #print("h length in evaluation:", len(h))
                 q = [torch.from_numpy(q) for q in q_batch]
-                qi = [torch.from_numpy(qi) for qi in q_batch_in]
-                qo = [torch.from_numpy(qo) for qo in q_batch_out]
+                ai = [torch.from_numpy(ai) for ai in a_batch_in]
+                ao = [torch.from_numpy(ao) for ao in a_batch_out]
                 s = torch.from_numpy(s_batch).cuda().float()
                 smi = [torch.from_numpy(smi) for smi in summary_batch_in] 
                 smo = [torch.from_numpy(smo) for smo in summary_batch_out]
+                c = [torch.from_numpy(c) for c in c_batch]
 
-                _, _, loss = model.loss(x, h, q, qi, smi, qo, smo, s)
+                _, _, loss = model.loss(x, h, c, ai, smi, ao, smo, s)
 
                 num_words = sum([len(s) for s in smo])
                 eval_loss += loss.cpu().data.numpy() * num_words
@@ -248,14 +248,10 @@ if __name__ == "__main__":
                      args.hist_enc_hsize, dropout=dropout, embed=embed_model),
         LSTMEncoder(args.in_enc_layers, len(vocab), args.in_enc_hsize,
                     args.embed_size, dropout=dropout, embed=embed_model),
-        HLSTMDecoder(args.dec_layers, len(vocab), len(vocab), args.embed_size,
+        Summary_HLSTMDecoder(args.dec_layers, len(vocab), len(vocab), args.embed_size,
                     args.hist_out_size + args.in_enc_hsize,
                      args.dec_hsize, args.dec_psize,
-                     independent=False, dropout=dropout, embed=embed_model),
-        Summary_HLSTMDecoder(args.dec_layers, len(vocab), len(vocab), args.embed_size,
-            args.hist_out_size + args.in_enc_hsize,
-             args.dec_hsize, args.dec_psize,
-             independent=False, dropout=dropout, embed=embed_model))
+                     independent=False, dropout=dropout, embed=embed_model))
     initialize_model_weights(model, "he", "xavier")
     # report data summary
     logging.info('#vocab = %d' % len(vocab))
@@ -273,7 +269,6 @@ if __name__ == "__main__":
     logging.info('#validation batch = %d' % len(valid_indices))
     # copy model to gpu
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    #device = torch.device("cuda:1")
     model.to(device)
     # save meta parameters
     path = args.model + '.conf'
@@ -322,7 +317,7 @@ if __name__ == "__main__":
         for j in six.moves.range(len(train_indices)):
             data_time.update(time.time() - end)
             # get fetched batch
-            x_batch, h_batch, q_batch, q_batch_in, q_batch_out, s_batch, summary_batch_in, summary_batch_out = batch.pop()
+            x_batch, h_batch, q_batch, a_batch_in, a_batch_out, s_batch, summary_batch_in, summary_batch_out, c_batch = batch.pop()
             #print("h_batch", len(h_batch))
             #print("-----------------")
             #print("h_batch len:", len(h_batch))
@@ -349,16 +344,17 @@ if __name__ == "__main__":
 
             h = [[torch.from_numpy(h) for h in hb] for hb in h_batch]
             #test_count +=
-            #print("h:", len(h), type(h)) 
+            #print("h:", len(h), type(h),h) 
             #  1 -10, which is the number of previous pairs
             # h_temp = h[1]
             # h_temp_temp = h_temp[0]
             # print("h_temp example size:",len(h_temp), type(h_temp))
             # print("h_temp_temp example size:", h_temp_temp.size(), type(h_temp_temp))
             q = [torch.from_numpy(q) for q in q_batch]
+            c = [torch.from_numpy(c) for c in c_batch]
             # test_count += len(q)
-            qi = [torch.from_numpy(qi) for qi in q_batch_in]
-            qo = [torch.from_numpy(qo) for qo in q_batch_out]
+            ai = [torch.from_numpy(ai) for ai in a_batch_in]
+            ao = [torch.from_numpy(ao) for ao in a_batch_out]
 
             ###summary
             smi = [torch.from_numpy(smi) for smi in summary_batch_in]
@@ -369,7 +365,7 @@ if __name__ == "__main__":
             s = torch.from_numpy(s_batch).cuda().float()
                 # print("s size:", s.size()): (4, 64, 49, 512)
             if len(h_batch) < 11:
-                _, _, loss = model.loss(x, h, q, qi, smi, qo, smo, s)
+                _, _, loss = model.loss(x, h, c, ai, smi, ao, smo, s)
 
                 num_words = sum([len(s) for s in smo])
                 batch_loss = loss.cpu().data.numpy()
@@ -400,6 +396,41 @@ if __name__ == "__main__":
                 batch_time.update(time.time() - end)
                 end = time.time()
 
+            # else:
+
+            #     _, _, loss = model.loss(x, h, q, qi, qo, s)
+
+            #     num_words = sum([len(s) for s in qo])
+            #     batch_loss = loss.cpu().data.numpy()
+            #     train_loss += batch_loss * num_words
+            #     train_num_words += num_words
+
+            #     cur_loss += batch_loss * num_words
+            #     cur_num_words += num_words
+            #     if (n + 1) % report_interval == 0:
+            #         now = time.time()
+            #         throuput = report_interval / (now - cur_at)
+            #         perp = math.exp(cur_loss / cur_num_words)
+            #         logging.info('iter {}, '
+            #                      'time {:.3f} ({:.3f})\t'
+            #                      'data {:.3f} ({:.3f})\t'
+            #                      'training perplexity: {:.2f} ({:.2f} iters/sec)'
+            #                      .format(n + 1, batch_time.val, batch_time.avg,
+            #                              data_time.val, data_time.avg, perp, throuput))
+
+            #         cur_at = now
+            #         cur_loss = 0.
+            #         cur_num_words = 0
+            #     n += 1
+            #     # Run truncated BPTT
+            #     optimizer.zero_grad()
+            #     loss.backward()
+            #     optimizer.step()
+            #     batch_time.update(time.time() - end)
+            #     end = time.time()
+
+
+
             # wait prefetch completion
             prefetch.join()
 
@@ -419,7 +450,6 @@ if __name__ == "__main__":
 
         if min_valid_ppl > valid_ppl:
             bestmodel_num = i + 1
-            #bestmodel_num = 1
             logging.info('validation perplexity reduced %.4f -> %.4f' % (min_valid_ppl, valid_ppl))
             min_valid_ppl = valid_ppl
 

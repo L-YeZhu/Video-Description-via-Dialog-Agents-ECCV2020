@@ -45,11 +45,6 @@ def get_vocabulary(dataset_file, cutoff=1, include_caption=False):
     for word, freq in word_freq.items():
         if freq > cutoff:
             vocab[word] = len(vocab) 
-    file = open('vocab.txt','w')
-    for k in range(len(vocab)):
-        file.write(str(k))
-        file.write(str(vocab[k]))
-    file.close()
 
     return vocab
 
@@ -87,9 +82,9 @@ def load(fea_types, fea_path, dataset_file, vocabfile='', vocab={},
     qa_id = 0
     for dialog in dialog_data['dialogs']:
         if include_caption:
-            caption = [words2ids(dialog['caption'], vocab, eos=eos)]
+            caption_i = [words2ids(dialog['caption'], vocab, eos=eos)]
         else:
-            caption = [np.array([eos], dtype=np.int32)]
+            caption_i = [np.array([eos], dtype=np.int32)]
 
         #summary = [words2ids(dialog['summary'], vocab)]
         #print("summary:", summary)
@@ -98,6 +93,7 @@ def load(fea_types, fea_path, dataset_file, vocabfile='', vocab={},
         questions = [words2ids(d['question'], vocab) for d in dialog['dialog']]
         answers = [words2ids(d['answer'], vocab) for d in dialog['dialog']]
         summaries = [words2ids(dialog['summary'], vocab) for d in dialog['dialog']]
+        captions = [words2ids(dialog['caption'], vocab) for d in dialog['dialog']]
         #print("summaries:", summaries)
 
         # get qa pairs
@@ -107,15 +103,16 @@ def load(fea_types, fea_path, dataset_file, vocabfile='', vocab={},
         vid_set.add(vid)
         # print("question length:", len(questions)) is 10, number of total questions
         for n in six.moves.range(len(questions)):
-            history = copy.copy(caption)
+            history = copy.copy(caption_i)
             for m in six.moves.range(n):
                 history.append(qa_pair[m])
             question = np.concatenate((questions[n], [eos])).astype(np.int32)
-            question_in = np.concatenate(([eos], questions[n])).astype(np.int32)
-            question_out = np.concatenate((questions[n], [eos])).astype(np.int32)
+            answer_in = np.concatenate(([eos], answers[n])).astype(np.int32)
+            answer_out = np.concatenate((answers[n], [eos])).astype(np.int32)
             summary_in = np.concatenate(([eos], summaries[n])).astype(np.int32)
             summary_out = np.concatenate((summaries[n], [eos])).astype(np.int32)
-            dialog_list.append((vid, qa_id, history, question, question_in, question_out, summary_in, summary_out))
+            caption = np.concatenate((captions[n], [eos])).astype(np.int32)
+            dialog_list.append((vid, qa_id, history, question, answer_in, answer_out, summary_in, summary_out, caption))
             qa_id += 1
 
     data = {'dialogs': dialog_list, 'vocab': vocab, 'features': [], 
@@ -155,10 +152,11 @@ def make_batch_indices(data, batchsize=100, max_length=20):
         q_len = len(dialog[3]) # question length
         a_len = len(dialog[4]) # answer length
         summary_len = len(dialog[6]) # summary length
-        idxlist.append((vid, qa_id, x_len, h_len, q_len, a_len, summary_len))
+        caption_len = len(dialog[8]) # caption length
+        idxlist.append((vid, qa_id, x_len, h_len, q_len, a_len, summary_len, caption_len))
 
     if batchsize > 1:
-        idxlist = sorted(idxlist, key=lambda s:(-s[3],-s[2][0],-s[4],-s[5],-s[6]))
+        idxlist = sorted(idxlist, key=lambda s:(-s[3],-s[2][0],-s[4],-s[5],-s[6], -s[7]))
 
     n_samples = len(idxlist)
     batch_indices = []
@@ -173,16 +171,17 @@ def make_batch_indices(data, batchsize=100, max_length=20):
         q_len = max(idxlist[bs:be], key=lambda s:s[4])[4]
         a_len = max(idxlist[bs:be], key=lambda s:s[5])[5]
         summary_len = max(idxlist[bs:be], key=lambda s:s[6])[6]
+        caption_len = max(idxlist[bs:be], key=lambda s:s[7])[7]
         vids = [ s[0] for s in idxlist[bs:be] ]
         qa_ids = [ s[1] for s in idxlist[bs:be] ]
-        batch_indices.append((vids, qa_ids, x_len, h_len, q_len, a_len, summary_len, be - bs))
+        batch_indices.append((vids, qa_ids, x_len, h_len, q_len, a_len, summary_len, caption_len, be - bs))
         bs = be
             
     return batch_indices, n_samples
 
 
 def make_batch(data, index, eos=1):
-    x_len, h_len, q_len, a_len, summary_len, n_seqs = index[2:]
+    x_len, h_len, q_len, a_len, summary_len, caption_len, n_seqs = index[2:]
     feature_info = data['features']
     for j in six.moves.range(n_seqs):
         fea = []
@@ -213,28 +212,30 @@ def make_batch(data, index, eos=1):
     empty_sentence = np.array([eos], dtype=np.int32)
     h_batch = [ [] for _ in six.moves.range(h_len) ]
     q_batch = []
-    q_batch_in = []
-    q_batch_out = []
+    a_batch_in = []
+    a_batch_out = []
     summary_batch_in = []
     summary_batch_out = []
+    c_batch = []
     dialogs = data['dialogs']
     for i in six.moves.range(n_seqs):
         qa_id = index[1][i]
-        history, question, question_in, question_out, summary_in, summary_out = dialogs[qa_id][2:]
+        history, question, answer_in, answer_out, summary_in, summary_out, caption= dialogs[qa_id][2:]
         for j in six.moves.range(h_len):
             if j < len(history):
                 h_batch[j].append(history[j])
             else:
                 h_batch[j].append(empty_sentence)
         q_batch.append(question)
-        q_batch_in.append(question_in)
-        q_batch_out.append(question_out)
+        a_batch_in.append(answer_in)
+        a_batch_out.append(answer_out)
         summary_batch_in.append(summary_in)
         summary_batch_out.append(summary_out)
+        c_batch.append(caption)
 
     #print(summary_batch_in)
 
-    return x_batch, h_batch, q_batch, q_batch_in, q_batch_out, s_batch, summary_batch_in, summary_batch_out
+    return x_batch, h_batch, q_batch, a_batch_in, a_batch_out, s_batch, summary_batch_in, summary_batch_out, c_batch
 
 
 def feature_shape(data):

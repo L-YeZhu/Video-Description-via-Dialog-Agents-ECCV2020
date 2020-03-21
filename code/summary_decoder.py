@@ -11,7 +11,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import six
 
-class HLSTMDecoder(nn.Module):
+class Summary_HLSTMDecoder(nn.Module):
 
     frame_based = False
     take_all_states = False
@@ -28,12 +28,11 @@ class HLSTMDecoder(nn.Module):
             proj_size (int) : Dimensionality of projection before softmax.
             dropout (float): Dropout ratio.
         """
-        super(HLSTMDecoder, self).__init__()
+        super(Summary_HLSTMDecoder, self).__init__()
         self.embed = nn.Embedding(in_size, embed_size) if embed is None else embed
-        self.lstm = nn.LSTM(embed_size *2 ,hidden_size,n_layers,dropout,batch_first=True)
+        self.lstm = nn.LSTM(256,hidden_size,n_layers,dropout,batch_first=True)
         self.proj = nn.Linear(hidden_size, proj_size)
         self.out = nn.Linear(proj_size, out_size)
-
         self.n_layers = n_layers
         self.dropout = dropout
         self.independent = independent
@@ -64,6 +63,7 @@ class HLSTMDecoder(nn.Module):
             cc = sections.tolist()
             hx = torch.split(bb, cc, dim=0)
         else:
+            xs[0] = torch.tensor(xs[0], dtype=torch.long).cuda()
             hx = [ self.embed(xs[0]) ]
         #print(hs.shape, len(hx), [e.shape for e in hx])
         #exit(1)
@@ -107,6 +107,7 @@ class HLSTMDecoder(nn.Module):
         """
         # LSTM decoder can be initialized in the same way as update()
         if len(x) > 1:
+            print("Initialization check:", len(x))
             self.hx = F.vstack([x[j][-1] for j in six.moves.range(len(x[1]))])
         else:
             self.hx = x
@@ -157,5 +158,6 @@ class HLSTMDecoder(nn.Module):
             (~chainer.Variable) log softmax vector
         """
         y = self.out(self.proj(s[2][0]))
+        #y = self.out(self.proj(s))
         return F.log_softmax(y, dim=1)
 

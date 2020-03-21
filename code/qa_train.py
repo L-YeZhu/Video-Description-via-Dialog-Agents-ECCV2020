@@ -18,14 +18,14 @@ import threading
 
 import torch
 
-import q_data_handler as dh
+import qa_data_handler as dh
 
-from q_bot_model import MMSeq2SeqModel
+from new_qa_bot_model import MMSeq2SeqModel
 from lstm_encoder import LSTMEncoder
 from hlstm_encoder import HLSTMEncoder
-from q_summary_decoder import Summary_HLSTMDecoder
 from hlstm_decoder import HLSTMDecoder
-#from reasoning import VideoRelationModule
+from summary_decoder import Summary_HLSTMDecoder
+from question_decoder import Question_HLSTMDecoder
 
 def initialize_model_weights(model, initialization, lstm_initialization):
     if initialization == "he":
@@ -65,8 +65,11 @@ def initialize_model_weights(model, initialization, lstm_initialization):
                     print("he")
                     torch.nn.init.kaiming_normal(param)
 
-def fetch_batch(dh, data, index, result):
-    result.append(dh.make_batch(data, index))
+def fetch_batch_a(dh, data, index, result):
+    result.append(dh.make_batch_a(data, index))
+
+def fetch_batch_q(dh, data, index, result):
+    result.append(dh.make_batch_q(data, index))
 
 # Evaluation routine
 def evaluate(model, data, indices):
@@ -76,35 +79,45 @@ def evaluate(model, data, indices):
     model.eval()
     with torch.no_grad():
         # fetch the first batch
-        batch = [dh.make_batch(data, indices[0])]
+        batch_a = [dh.make_batch_a(data, indices[0])]
+        batch_q = [dh.make_batch_q(data, indices[0])]
         # evaluation loop
         for j in six.moves.range(len(indices)):
             # get a fetched batch
-            x_batch, h_batch, q_batch, q_batch_in, q_batch_out, s_batch, summary_batch_in, summary_batch_out = batch.pop()
+            x_batch, h_batch, q_batch, a_batch_in, a_batch_out, s_batch, summary_batch_in, summary_batch_out, c_batch = batch_a.pop()
+            q_batch_in, q_batch_out, all_a_batch_in, all_q_batch_in = batch_q.pop()
             # fetch the next batch in parallel
             if j < len(indices) - 1:
-                prefetch = threading.Thread(target=fetch_batch,
-                                            args=([dh, data, indices[j + 1], batch]))
-                prefetch.start()
+                prefetch1 = threading.Thread(target=fetch_batch_a,
+                                            args=([dh, data, indices[j + 1], batch_a]))
+                prefetch2 = threading.Thread(target=fetch_batch_q,
+                                            args=([dh, data, indices[j + 1], batch_q]))
+                prefetch1.start()
+                prefetch2.start()
             # propagate for training
             if len(h_batch) < 12:
                 x = [torch.from_numpy(x) for x in x_batch]
                 h = [[torch.from_numpy(h) for h in hb] for hb in h_batch]
-                #print("h length in evaluation:", len(h))
                 q = [torch.from_numpy(q) for q in q_batch]
-                qi = [torch.from_numpy(qi) for qi in q_batch_in]
-                qo = [torch.from_numpy(qo) for qo in q_batch_out]
+                ai = [torch.from_numpy(ai) for ai in a_batch_in]
+                ao = [torch.from_numpy(ao) for ao in a_batch_out]
                 s = torch.from_numpy(s_batch).cuda().float()
                 smi = [torch.from_numpy(smi) for smi in summary_batch_in] 
                 smo = [torch.from_numpy(smo) for smo in summary_batch_out]
+                c = [torch.from_numpy(c) for c in c_batch]
+                qi = [torch.from_numpy(qi) for qi in q_batch_in]
+                qo = [torch.from_numpy(qo) for qo in q_batch_out]
+                all_ai = [torch.from_numpy(all_ai) for all_ai in all_a_batch_in]
+                all_qi = [torch.from_numpy(all_qi) for all_qi in all_q_batch_in]
 
-                _, _, loss = model.loss(x, h, q, qi, smi, qo, smo, s)
+                _, _, loss = model.loss(x, h, q, c, ai, qi, smi, ao, qo, smo, s, all_ai, all_qi)
 
                 num_words = sum([len(s) for s in smo])
                 eval_loss += loss.cpu().data.numpy() * num_words
                 eval_num_words += num_words
                 # wait prefetch completion
-            prefetch.join()
+            prefetch1.join()
+            prefetch2.join()
     model.train()
 
     wall_time = time.time() - start_time
@@ -239,6 +252,7 @@ if __name__ == "__main__":
 
     # Prepare RNN model and load data
     #embed_model = nn.Embedding(len(vocab), args.embed_size)
+    #print("vocab:", len(vocab))
     embed_model = None
     dropout = 0.5
     model = MMSeq2SeqModel(
@@ -248,14 +262,24 @@ if __name__ == "__main__":
                      args.hist_enc_hsize, dropout=dropout, embed=embed_model),
         LSTMEncoder(args.in_enc_layers, len(vocab), args.in_enc_hsize,
                     args.embed_size, dropout=dropout, embed=embed_model),
+        LSTMEncoder(args.in_enc_layers, len(vocab), args.in_enc_hsize,
+                    args.embed_size, dropout=dropout, embed=embed_model),
         HLSTMDecoder(args.dec_layers, len(vocab), len(vocab), args.embed_size,
                     args.hist_out_size + args.in_enc_hsize,
                      args.dec_hsize, args.dec_psize,
                      independent=False, dropout=dropout, embed=embed_model),
         Summary_HLSTMDecoder(args.dec_layers, len(vocab), len(vocab), args.embed_size,
-            args.hist_out_size + args.in_enc_hsize,
-             args.dec_hsize, args.dec_psize,
-             independent=False, dropout=dropout, embed=embed_model))
+                    args.hist_out_size + args.in_enc_hsize,
+                     args.dec_hsize, args.dec_psize,
+                     independent=False, dropout=dropout, embed=embed_model),
+        Question_HLSTMDecoder(args.dec_layers, len(vocab), len(vocab), args.embed_size,
+                    args.hist_out_size + args.in_enc_hsize,
+                     args.dec_hsize, args.dec_psize,
+                     independent=False, dropout=dropout, embed=embed_model),
+        )
+
+    # check param number
+    print('Param number:', sum(param.numel() for param in model.parameters()))
     initialize_model_weights(model, "he", "xavier")
     # report data summary
     logging.info('#vocab = %d' % len(vocab))
@@ -273,7 +297,6 @@ if __name__ == "__main__":
     logging.info('#validation batch = %d' % len(valid_indices))
     # copy model to gpu
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    #device = torch.device("cuda:1")
     model.to(device)
     # save meta parameters
     path = args.model + '.conf'
@@ -316,13 +339,17 @@ if __name__ == "__main__":
         data_time = AverageMeter()
         end = time.time()
         # fetch the first batch
-        batch = [dh.make_batch(train_data, train_indices[0])]
+        batch_a = [dh.make_batch_a(train_data, train_indices[0])]
+        batch_q = [dh.make_batch_q(train_data, train_indices[0])]
         #test_count = 0
         # train iterations
+        count = 0
+        cul_loss_batch = 0
         for j in six.moves.range(len(train_indices)):
             data_time.update(time.time() - end)
             # get fetched batch
-            x_batch, h_batch, q_batch, q_batch_in, q_batch_out, s_batch, summary_batch_in, summary_batch_out = batch.pop()
+            x_batch, h_batch, q_batch, a_batch_in, a_batch_out, s_batch, summary_batch_in, summary_batch_out, c_batch = batch_a.pop()
+            q_batch_in, q_batch_out, all_a_batch_in, all_q_batch_in = batch_q.pop()
             #print("h_batch", len(h_batch))
             #print("-----------------")
             #print("h_batch len:", len(h_batch))
@@ -330,9 +357,12 @@ if __name__ == "__main__":
             # fetch the next batch in parallel
 
             if j < len(train_indices) - 1:
-                prefetch = threading.Thread(target=fetch_batch,
-                                            args=([dh, train_data, train_indices[j + 1], batch]))
-                prefetch.start()
+                prefetch1 = threading.Thread(target=fetch_batch_a,
+                                            args=([dh, train_data, train_indices[j + 1], batch_a]))
+                prefetch2 = threading.Thread(target=fetch_batch_q,
+                                            args=([dh, train_data, train_indices[j + 1], batch_q]))
+                prefetch1.start()
+                prefetch2.start()
 
 
             # if j < len(train_indices) - 1:
@@ -349,27 +379,36 @@ if __name__ == "__main__":
 
             h = [[torch.from_numpy(h) for h in hb] for hb in h_batch]
             #test_count +=
-            #print("h:", len(h), type(h)) 
+            #print("h:", len(h), type(h),h) 
             #  1 -10, which is the number of previous pairs
             # h_temp = h[1]
             # h_temp_temp = h_temp[0]
             # print("h_temp example size:",len(h_temp), type(h_temp))
             # print("h_temp_temp example size:", h_temp_temp.size(), type(h_temp_temp))
             q = [torch.from_numpy(q) for q in q_batch]
+            c = [torch.from_numpy(c) for c in c_batch]
             # test_count += len(q)
+            ai = [torch.from_numpy(ai) for ai in a_batch_in]
+            ao = [torch.from_numpy(ao) for ao in a_batch_out]
+
             qi = [torch.from_numpy(qi) for qi in q_batch_in]
-            qo = [torch.from_numpy(qo) for qo in q_batch_out]
+            qo = [torch.from_numpy(qo) for qo in q_batch_out]            
 
             ###summary
             smi = [torch.from_numpy(smi) for smi in summary_batch_in]
             smo = [torch.from_numpy(smo) for smo in summary_batch_out]
 
+            all_ai = [torch.from_numpy(all_ai) for all_ai in all_a_batch_in]
+            all_qi = [torch.from_numpy(all_qi) for all_qi in all_q_batch_in]
 
+            # print("check h", len(h))
+            # print("check all_qi", len(all_qi[0]), all_qi[0])
+            # print("check qi", len(qi[0]), qi[0])
             # s is 4 frames video
             s = torch.from_numpy(s_batch).cuda().float()
                 # print("s size:", s.size()): (4, 64, 49, 512)
-            if len(h_batch) < 11:
-                _, _, loss = model.loss(x, h, q, qi, smi, qo, smo, s)
+            if len(h_batch) < 12:
+                _, _, loss = model.loss(x, h, q, c, ai, qi, smi, ao, qo, smo, s, all_ai, all_qi)
 
                 num_words = sum([len(s) for s in smo])
                 batch_loss = loss.cpu().data.numpy()
@@ -393,15 +432,36 @@ if __name__ == "__main__":
                     cur_loss = 0.
                     cur_num_words = 0
                 n += 1
-                # Run truncated BPTT
+                # if count == 1:
+                #     # Run truncated BPTT
+                #     optimizer.zero_grad()
+                #     #cul_loss_batch = loss
+                #     #print("loss in training before update:", cul_loss_batch)
+                #     #cul_loss_batch /= 10
+                #     print("loss in training before update:", cul_loss_batch)
+                #     cul_loss_batch.backward()
+                #     optimizer.step()
+                #     batch_time.update(time.time() - end)
+                #     end = time.time()
+                #     count = 0
+                #     cul_loss_batch = 0
+                # else:
+                #     optimizer.zero_grad()
+                #     cul_loss_batch += (loss/10)
+                #     #print("loss in training:", cul_loss_batch)
+                #     count += 1
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
                 batch_time.update(time.time() - end)
                 end = time.time()
 
+
+
+
             # wait prefetch completion
-            prefetch.join()
+            prefetch1.join()
+            prefetch2.join()
 
 
 
@@ -410,6 +470,8 @@ if __name__ == "__main__":
         logging.info('-----------------------validation--------------------------')
         now = time.time()
         valid_ppl, valid_time = evaluate(model, valid_data, valid_indices)
+        #valid_ppl  = 0
+        #valid_time = 0 
         logging.info('validation perplexity: %.4f' % (valid_ppl))
 
         # update the model via comparing with the lowest perplexity
@@ -419,7 +481,6 @@ if __name__ == "__main__":
 
         if min_valid_ppl > valid_ppl:
             bestmodel_num = i + 1
-            #bestmodel_num = 1
             logging.info('validation perplexity reduced %.4f -> %.4f' % (min_valid_ppl, valid_ppl))
             min_valid_ppl = valid_ppl
 
