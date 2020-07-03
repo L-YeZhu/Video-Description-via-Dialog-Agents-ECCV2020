@@ -21,7 +21,7 @@ The annotations can be downloaded [here](https://drive.google.com/file/d/1CWXNeX
 The audio-visual features can be downloaded [here](https://drive.google.com/file/d/15KwizowgEtUJKESDOGEICutHrqiXFQ5e/view?usp=sharing). Please extract to ‘data/charades_features’.
 
 #### 4. Running the code
-Use the command <code>./run.sh</code> to run the codes.\
+Use the command <code>./qa_run.sh</code> to run the codes.\
 The pretained model is available here.
 
 #### 5. Citation
