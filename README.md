@@ -17,5 +17,18 @@ We introduce a task that aims whose ultimate goal is for one coversational agent
 
 #### 3. Data
 The original AVSD dataset used in our experiments can be found [here](https://github.com/hudaAlamri/DSTC7-Audio-Visual-Scene-Aware-Dialog-AVSD-Challenge).\
-The annotations can be downloaded [here](https://drive.google.com/file/d/1CWXNeXsxz8UelosF8XWU9bNLFkUON2J3/view?usp=sharing).
-The audio-visual features can be downloaded [here](https://drive.google.com/file/d/15KwizowgEtUJKESDOGEICutHrqiXFQ5e/view?usp=sharing).
+The annotations can be downloaded [here](https://drive.google.com/file/d/1CWXNeXsxz8UelosF8XWU9bNLFkUON2J3/view?usp=sharing). Please extract to ‘data/’.\
+The audio-visual features can be downloaded [here](https://drive.google.com/file/d/15KwizowgEtUJKESDOGEICutHrqiXFQ5e/view?usp=sharing). Please extract to ‘data/charades_features’.
+
+#### 4. Running the code
+Use the command <code>./run.sh</code> to run the codes.\
+The pretained model is available here.
+
+#### 5. Citation
+Please consider citing our paper if you find it interesting.\
+<code> @InProceedings{yzhu2018describing, </code> \
+&nbsp;&nbsp;&nbsp;&nbsp; <code> author = {Zhu, Ye and Wu, Yu and Yang, Yi and Yan, Yan}, </code>
+&nbsp;&nbsp;&nbsp;&nbsp; <code> title = {Describing Unseen Videos via Multi-Modal Cooperative Dialog Agents}, </code>
+&nbsp;&nbsp;&nbsp;&nbsp; <code> booktitle = {The European Conference on Computer Vision (ECCV)}, </code>
+&nbsp;&nbsp;&nbsp;&nbsp; <code> year = {2020} </code>
+} 
