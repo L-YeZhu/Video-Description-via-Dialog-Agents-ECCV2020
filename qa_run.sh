@@ -1,6 +1,4 @@
 #!/bin/bash
-# Train and evaluate scene-aware dialog models
-# Copyright 2018 Mitsubishi Electric Research Labs
 
 . path.sh
 
@@ -9,17 +7,16 @@ use_slurm=false
 slurm_queue=clusterNew
 workdir=`pwd`
 
-model_name=final_qa1
+model_name=qa_model
 
 # train|val|test sets including dialog text for each video
 train_set=data/train_set4DSTC7-AVSD.json
 valid_set=data/val_set.json
-#test_set=data/test_set4DSTC7-AVSD.json
 test_set=data/test_set.json
 
 # directory to read feature files
-#fea_dir=/home/idansc@st.technion.ac.il/audio/AudioVisualSceneAwareDialog/data/charades_features/
-fea_dir=/home/Students/y_z34/agents/data/charades_features
+### insert your feature directory here
+fea_dir=/data/charades_features
 # feature file pattern/
 fea_file="<FeaType>/<ImageID>.npy"
 # input feature types
@@ -199,7 +196,6 @@ if [ $stage -le 4 ]; then
         echo Evaluating: $result
         python utils/qa_get_hypotheses.py -s data/stopwords.txt $result $hypothesis
         python utils/qa_get_annotation.py -s data/stopwords.txt $data_set $reference
-        #python utils/q_get_hypotheses.py -s data/stopwords.txt $result $hypothesis
         python utils/evaluate.py $reference $hypothesis $model_name $expdir/avsd_model >& $result_eval
         echo Wrote details in $result_eval
         echo "--- summary ---"
