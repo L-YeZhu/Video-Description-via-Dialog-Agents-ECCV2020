@@ -4,4 +4,6 @@ This repository is the implementation for the unseen video description task intr
 
 #### Introduction of the task
 We introduce a task that aims whose ultimate goal is for one coversational agent to describe an unseen video based on the dialog and two static frames from the video as shown below.\
-<img src="https://github.com/L-YeZhu/AVSD-Agents/blob/master/figures/fig1.png" align="center" width="500">.
+<p align="center">
+<img src="https://github.com/L-YeZhu/AVSD-Agents/blob/master/figures/fig1.png" width="500">
+  </p>
