@@ -31,5 +31,6 @@ Please consider citing our paper if you find it interesting.
   author = {Zhu, Ye and Wu, Yu and Yang, Yi and Yan, Yan},    
   title = {Describing Unseen Videos via Multi-Modal Cooperative Dialog Agents},    
   booktitle = {The European Conference on Computer Vision (ECCV)},    
-  year = {2020} }
+  year = {2020} 
+  }
 ```
