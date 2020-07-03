@@ -25,9 +25,11 @@ Use the command <code>./run.sh</code> to run the codes.\
 The pretained model is available here.
 
 #### 5. Citation
-Please consider citing our paper if you find it interesting.\
-  @InProceedings{yzhu2018describing,    
+Please consider citing our paper if you find it interesting.
+```
+@InProceedings{yzhu2018describing,    
   author = {Zhu, Ye and Wu, Yu and Yang, Yi and Yan, Yan},    
   title = {Describing Unseen Videos via Multi-Modal Cooperative Dialog Agents},    
   booktitle = {The European Conference on Computer Vision (ECCV)},    
   year = {2020} }
+```
