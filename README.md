@@ -26,9 +26,8 @@ The pretained model is available here.
 
 #### 5. Citation
 Please consider citing our paper if you find it interesting.\
-<code> @InProceedings{yzhu2018describing, </code> \
-&nbsp;&nbsp;&nbsp;&nbsp; <code> author = {Zhu, Ye and Wu, Yu and Yang, Yi and Yan, Yan}, </code> \
-&nbsp;&nbsp;&nbsp;&nbsp; <code> title = {Describing Unseen Videos via Multi-Modal Cooperative Dialog Agents}, </code> \
-&nbsp;&nbsp;&nbsp;&nbsp; <code> booktitle = {The European Conference on Computer Vision (ECCV)}, </code> \
-&nbsp;&nbsp;&nbsp;&nbsp; <code> year = {2020} </code>
-} 
+  @InProceedings{yzhu2018describing,    
+  author = {Zhu, Ye and Wu, Yu and Yang, Yi and Yan, Yan},    
+  title = {Describing Unseen Videos via Multi-Modal Cooperative Dialog Agents},    
+  booktitle = {The European Conference on Computer Vision (ECCV)},    
+  year = {2020} }
