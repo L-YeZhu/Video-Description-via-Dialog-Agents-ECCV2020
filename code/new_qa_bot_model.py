@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Dialog agents for AVSD
+"""Dialog agents for Video Descriptions
 """
 
 import sys
@@ -10,7 +10,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import random
-from atten import Atten, NaiveAttention, H_Q_Attention_q, H_Q_Attention_a, H_Q_Attention_g
+from atten import Atten
 torch.manual_seed(1)
 
 
@@ -51,16 +51,11 @@ class MMSeq2SeqModel(nn.Module):
         self.qalstm = nn.LSTM(128,128)
         #self.plstm = nn.LSTM(256,128)
 
-        #self.atten = NaiveAttention()
         self.a_atten = Atten(util_e=[self.s_embed, self.s_embed,self.s_embed, self.s_embed, self.a_embed, self.c_embed, self.h_embed], high_order_utils=high_order_utils,
                            prior_flag=True, sizes=[49, 49, 49, 49, 10, 10, 10], size_flag=False, pairwise_flag=True, unary_flag=True, self_flag=True)
         self.q_atten = Atten(util_e=[self.s_embed, self.s_embed, self.h_embed], high_order_utils=high_order_utils,
                            prior_flag=True, sizes=[49, 49, 10], size_flag=False, pairwise_flag=True, unary_flag=True, self_flag=True)
 
-        # #EXPERIMENTS
-        # self.q_pair_atten = H_Q_Attention_q()
-        # self.a_pair_atten = H_Q_Attention_a()
-        # self.g_pair_atten = H_Q_Attention_g()
 
 
     def loss(self, mx, hx, x, c, y_a, y_q, y_s, t_a, t_q, t_s, s, all_ai, all_qi):
@@ -120,11 +115,6 @@ class MMSeq2SeqModel(nn.Module):
             else:
                 seperate_ai = y_a
                 seperate_qi = y_q
-
-            # print('y_a', len(y_a[0]), len(y_a[25]))
-            # print('seperate_ai', len(seperate_ai[0]), len(seperate_ai[25]))
-            # print('y_q', seperate_qi[6])
-            # print('y_a', seperate_ai[6])
 
         # ##################################################################
         # qa_id = len(hx)
@@ -251,13 +241,8 @@ class MMSeq2SeqModel(nn.Module):
 
             qa_id += 1
             round_n += 1
-            # print('history len', len(hx))
-            # print('eh_temp', eh_temp.size())
-            # print('dq', dq.size())
-            # print('da', da.size())
             r_p = torch.cat((dq,da), dim=1).transpose(0,1)
             _, (r_p, _) = self.qalstm(r_p)
-            # print('r_p', r_p.size())
 
             eh_temp = torch.cat((eh_temp, r_p.transpose(0,1)), dim=1)
 
