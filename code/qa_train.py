@@ -350,10 +350,6 @@ if __name__ == "__main__":
             # get fetched batch
             x_batch, h_batch, q_batch, a_batch_in, a_batch_out, s_batch, summary_batch_in, summary_batch_out, c_batch = batch_a.pop()
             q_batch_in, q_batch_out, all_a_batch_in, all_q_batch_in = batch_q.pop()
-            #print("h_batch", len(h_batch))
-            #print("-----------------")
-            #print("h_batch len:", len(h_batch))
-            # print("summary_batch_out",summary_batch_out)
             # fetch the next batch in parallel
 
             if j < len(train_indices) - 1:
@@ -365,29 +361,15 @@ if __name__ == "__main__":
                 prefetch2.start()
 
 
-            # if j < len(train_indices) - 1:
-            #     prefetch = threading.Thread(target=fetch_batch,
-            #                                 args=([dh, train_data, train_indices[j + 1], batch]))
-            #     prefetch.start()
 
             # propagate for training
             # x is audio, list
             x = [torch.from_numpy(x) for x in x_batch]
-            # x_temp = x[0]
-            # print(x_temp.size()) # is (n, 64, 128), n is the max length of audio in the batch
-            # print("x is audio data with dim:", len(x)) # lenth of x list is 1
+
 
             h = [[torch.from_numpy(h) for h in hb] for hb in h_batch]
-            #test_count +=
-            #print("h:", len(h), type(h),h) 
-            #  1 -10, which is the number of previous pairs
-            # h_temp = h[1]
-            # h_temp_temp = h_temp[0]
-            # print("h_temp example size:",len(h_temp), type(h_temp))
-            # print("h_temp_temp example size:", h_temp_temp.size(), type(h_temp_temp))
             q = [torch.from_numpy(q) for q in q_batch]
             c = [torch.from_numpy(c) for c in c_batch]
-            # test_count += len(q)
             ai = [torch.from_numpy(ai) for ai in a_batch_in]
             ao = [torch.from_numpy(ao) for ao in a_batch_out]
 
@@ -401,12 +383,7 @@ if __name__ == "__main__":
             all_ai = [torch.from_numpy(all_ai) for all_ai in all_a_batch_in]
             all_qi = [torch.from_numpy(all_qi) for all_qi in all_q_batch_in]
 
-            # print("check h", len(h))
-            # print("check all_qi", len(all_qi[0]), all_qi[0])
-            # print("check qi", len(qi[0]), qi[0])
-            # s is 4 frames video
             s = torch.from_numpy(s_batch).cuda().float()
-                # print("s size:", s.size()): (4, 64, 49, 512)
             if len(h_batch) < 12:
                 _, _, loss = model.loss(x, h, q, c, ai, qi, smi, ao, qo, smo, s, all_ai, all_qi)
 
@@ -432,24 +409,7 @@ if __name__ == "__main__":
                     cur_loss = 0.
                     cur_num_words = 0
                 n += 1
-                # if count == 1:
-                #     # Run truncated BPTT
-                #     optimizer.zero_grad()
-                #     #cul_loss_batch = loss
-                #     #print("loss in training before update:", cul_loss_batch)
-                #     #cul_loss_batch /= 10
-                #     print("loss in training before update:", cul_loss_batch)
-                #     cul_loss_batch.backward()
-                #     optimizer.step()
-                #     batch_time.update(time.time() - end)
-                #     end = time.time()
-                #     count = 0
-                #     cul_loss_batch = 0
-                # else:
-                #     optimizer.zero_grad()
-                #     cul_loss_batch += (loss/10)
-                #     #print("loss in training:", cul_loss_batch)
-                #     count += 1
+
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
@@ -462,7 +422,6 @@ if __name__ == "__main__":
             # wait prefetch completion
             prefetch1.join()
             prefetch2.join()
-
 
 
         logging.info("epoch: %d  train perplexity: %f" % (i + 1, math.exp(train_loss / train_num_words)))
