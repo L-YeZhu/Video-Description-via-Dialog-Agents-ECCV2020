@@ -44,7 +44,7 @@ dec_psize=256
 dec_hsize=256   # dim of cell states
 
 # training params
-num_epochs=1  # number of maximum epochs
+num_epochs=3  # number of maximum epochs
 batch_size=64   # batch size
 max_length=256  # batch size is reduced if len(input_feature) >= max_length
 optimizer=Adam  # SGD|AdaDelta|RMSprop
