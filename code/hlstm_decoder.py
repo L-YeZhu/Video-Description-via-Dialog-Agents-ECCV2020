@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 """Hierarchical LSTM Decoder module
    Adapted from 2018 Mitsubishi Electric Research Labs
-   Used in: A Simple Baseline for Audio-Visual Scene-Aware Dialog
-   https://arxiv.org/abs/1904.05876v1
+   Used in: Describing Unseen Videos via Multi-Modal Cooperative Dialog Agents
 """
 
 import numpy as np
@@ -35,7 +34,6 @@ class HLSTMDecoder(nn.Module):
         self.proj = nn.Linear(hidden_size, proj_size)
         self.out = nn.Linear(proj_size, out_size)
         self.lin = nn.Linear(256,128)
-        #self.out_g = nn.Linear(128, out_size)
 
         self.n_layers = n_layers
         self.dropout = dropout
@@ -70,12 +68,9 @@ class HLSTMDecoder(nn.Module):
             #sections = np.array([len(x) for x in xs], dtype=np.int32)
             xs[0] = torch.tensor(xs[0], dtype=torch.long).cuda()
             hx = [self.embed(xs[0])]
-                #print("hx_temp size:", hx_temp.size())
             #print(hs.shape, len(hx), [e.shape for e in hx])
             #exit(1)
         hxc = [ torch.cat((hx[i], hs[i].repeat(hx[i].shape[0], 1)), dim=1) for i in six.moves.range(len(hx))]
-        #print("hxc shape:", len(hxc))
-
         sort_hxc = []
         cc = torch.from_numpy(sections)
         cc, perm_index = torch.sort(cc, 0, descending=True)
@@ -84,28 +79,12 @@ class HLSTMDecoder(nn.Module):
         packed_hxc = nn.utils.rnn.pack_padded_sequence(padded_hxc, list(cc.data), batch_first=True)
         if s is None or (hasattr(self, 'independent') and self.independent):
             ys, (hy, cy) = self.lstm(packed_hxc)
-            #print("check 1",ys.size())
         else:
             ys, (hy, cy) = self.lstm(packed_hxc, s)
-            #print("check 2",ys.size())
 
         
         ys = nn.utils.rnn.pad_packed_sequence(ys, batch_first=True)[0]
-        #print("ys size:", ys.size())
         ys_q = self.lin(ys)
-        #print("ys_q size:", ys_q.size())
-        # for i in range(len(xs)):
-        #     xs[i] = torch.tensor(xs[i], dtype=torch.long).cuda()
-        #     ys_q_i = self.embed(xs[i])
-        #     print("ys_q_i",ys_q_i.size())
-        #     ys_q_i= ys_q_i.unsqueeze(0)
-        #     print("ys_q_i",ys_q_i.size())
-        #     if i == 0:
-        #         ys_q = ys_q_i
-        #     else:
-        #         ys_q = torch.cat((ys_q, ys_q_i),dim=0)
-        #print("ys size:", ys.size())
-        # restore the sorting
         cc2, perm_index2 = torch.sort(perm_index, 0)
         odx = perm_index2.view(-1, 1).unsqueeze(1).expand(ys.size(0), ys.size(1), ys.size(2))
         ys2 = ys.gather(0, odx.cuda())
@@ -114,21 +93,7 @@ class HLSTMDecoder(nn.Module):
         ys2_list.append([ys2[i, 0:sections[i],:] for i in six.moves.range(ys2.shape[0])])
         y = self.out(self.proj(
                 F.dropout(torch.cat(ys2_list[0], dim=0), p=self.dropout)))
-        #print("y size:", y.size())
         return (hy, cy), y, ys_q
-
-        # else:
-        #     #sections = np.array([len(x) for x in xs], dtype=np.int32)
-        #     xs[0] = torch.tensor(xs[0], dtype=torch.long).cuda()
-        #     hx = [ self.embed(xs[0]) ]
-        #     ys_q = self.embed(xs[0])
-        #     #print("ys_q size:", ys_q.size())
-        #     #y = self.out_g(ys_q.unsqueeze(0))
-        #     # print("xs",xs)
-        #     # print(ys_q.size())
-        #     # y = self.out(self.proj(hx, p=self.dropout))
-        #     #print("y:", y.size())
-        #     return  y, ys_q
 
 
     # interface for beam search
