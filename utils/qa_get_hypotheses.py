@@ -29,8 +29,6 @@ image_id=1
 for dialog in result['dialogs']:
     vid = dialog['image_id']
     for n, qa in enumerate(dialog['dialog']):
-        #if (n+1) % 10 == 1   :
-            #print('n num',n)
         if args.last==False or n==len(dialog['dialog'])-1:
             idx = '%s_%d' % (vid, n)
             sent = dialog['dialog'][n]['summary']
