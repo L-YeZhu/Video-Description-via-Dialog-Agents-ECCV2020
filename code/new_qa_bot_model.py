@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Dialog agents for AVSD
+"""Video-Description-via-Dialog-Agents
 """
 
 import sys
@@ -117,11 +117,6 @@ class MMSeq2SeqModel(nn.Module):
                 seperate_ai = y_a
                 seperate_qi = y_q
 
-            # print('y_a', len(y_a[0]), len(y_a[25]))
-            # print('seperate_ai', len(seperate_ai[0]), len(seperate_ai[25]))
-            # print('y_q', seperate_qi[6])
-            # print('y_a', seperate_ai[6])
-
         # ##################################################################
         # qa_id = len(hx)
         # iter_count = 0
@@ -140,10 +135,10 @@ class MMSeq2SeqModel(nn.Module):
                 s_for_q = self.q_emb_s(s_for_q)
                 s_for_q = s_for_q.view(num_samples, -1, s_for_q.size(1), s_for_q.size(2)).transpose(2, 3)
 
-            # Multimodal attention
+            	# Multimodal attention
                 ei_for_q = self.q_atten(utils=[s_for_q[0], s_for_q[3], eh_temp], priors=[None, None, None])
 
-            # Prepare the decoder
+            	# Prepare the decoder
                 a_s_for_q = [ei_for_q[0], ei_for_q[1]]
                 a_a_s_for_q = torch.cat([u.unsqueeze(1) for u in a_s_for_q], dim=1)
                 _, hidden_temporal_state_for_q = self.q_emb_temporal_sp(a_a_s_for_q)
@@ -153,22 +148,11 @@ class MMSeq2SeqModel(nn.Module):
 
             _, _, dq = self.q_question_decoder(hidden_temporal_state_for_q, es_for_q, seperate_qi)
 
-            #print('dq', dq.size())
+            _, (r_dq,dc) = self.qalstm(dq.transpose(0,1))      
 
-            _, (r_dq,dc) = self.qalstm(dq.transpose(0,1))
-            #print('dq', r_dq.size())            
-
-        ###################################################################################
         #################   A bot #####################
 
             if round_n == 0:
-
-                # # print("question embedding before attention:", ei.size())
-                # # print("question embedding example:", ei[0,:,:])
-                # q_prior = torch.zeros(ei.size(0), ei.size(1)).cuda()
-                # idx = torch.from_numpy(ei_len - 1).long().cuda()
-                # batch_index = torch.arange(0, ei_len.shape[0]).long().cuda()
-                # q_prior[batch_index, idx] = 1
 
                 # caption embed for A BOT
                 ei_c, ei_len_c = self.a_caption_encoder(None, c)
@@ -178,7 +162,6 @@ class MMSeq2SeqModel(nn.Module):
                 idx_c = torch.from_numpy(ei_len_c - 1).long().cuda()
                 batch_index_c = torch.arange(0, ei_len_c.shape[0]).long().cuda()
                 c_prior[batch_index_c, idx_c] = 1
-
 
                 # visual input for A BOT
                 num_samples = s.shape[0]
@@ -196,45 +179,19 @@ class MMSeq2SeqModel(nn.Module):
 
                 # Multimodal attention
                 ei = self.a_atten(utils=[s_for_a[0], s_for_a[1], s_for_a[2], s_for_a[3], a, ei_c, eh_temp], priors=[None, None, None, None, None, c_prior, None])
-
-                #print("question embeding after attention:", a_q.size())
-                #a_s: attended embeddings for 4 visual frames
                 a_s_for_a = [ei[0], ei[1], ei[2], ei[3]]
-                #print("visual embedding after attention:", ei[1].size())
-                #a_a: attended audio embedding
                 a_a = ei[4]
-                #print("audio embedding after attention:", a_a.size())
                 a_c = ei[5]
-
                 a_h = ei[6]
-                #print("a_h and eh dim:", a_h.size(), eh.size())
-
                 a_a_s = torch.cat([a_a.unsqueeze(1)] + [u.unsqueeze(1) for u in a_s_for_a], dim=1)
                 _, hidden_temporal_state_for_a = self.a_emb_temporal_sp(a_a_s)
-                #eh_temp, eh = self.history_encoder(None, hx)
-            #print("history embedding:", eh_temp.size(), eh.size()) #is (1, 64, 128)
-            #ei = self.a_atten(utils=[ei, s_for_a[0], s_for_a[1], s_for_a[2], s_for_a[3], a, ei_c, eh_temp_for_a], priors=[q_prior, None, None, None, None, None, c_prior, None])
 
-
-        #     # s1 = torch.cat((a_h , a_c), dim=1)
-        #     pair_att_for_a = self.a_pair_atten(eh_temp_for_a, a_c)
-        # #print("check atten_test:", test_att_out, test_att_out.size())
-
-        # # concatenate encodings
-        # # es = ei[6]
-        # #print("es size:", es.size())
-        # # es = a_h.squeeze()
-        # #es = a_q
-            #print("a_c", a_c.size())
             ei = self.a_atten(utils=[s_for_a[0], s_for_a[1], s_for_a[2], s_for_a[3], a, ei_c, eh_temp], priors=[None, None, None, None, None, c_prior, None])
             a_c = ei[5]
             a_h = ei[6]
             es_for_a = torch.cat((a_c, a_h, r_dq.squeeze(0)), dim=1)
-        ## caption + his_with_att
-        #es = torch.cat((a_q, a_h[-1]), dim=1)
 
-        #generate answer dy for the given question
-        #print("check point 1 - es_for_a size:", es_for_a.size())
+        #generate answer for the given question
             if hasattr(self.a_response_decoder, 'context_to_state') \
                 and self.a_response_decoder.context_to_state==True:
                 _,  _, da = self.a_response_decoder(es_for_a, None, y_a) 
@@ -247,29 +204,14 @@ class MMSeq2SeqModel(nn.Module):
 
             qa_id += 1
             round_n += 1
-            # print('history len', len(hx))
-            # print('eh_temp', eh_temp.size())
-            # print('dq', dq.size())
-            # print('da', da.size())
             r_p = torch.cat((dq,da), dim=1).transpose(0,1)
             _, (r_p, _) = self.qalstm(r_p)
-            # print('r_p', r_p.size())
 
             eh_temp = torch.cat((eh_temp, r_p.transpose(0,1)), dim=1)
 
 ###################################################################################################################
-
         if qa_id == 11:
-                #pair_att = self.g_pair_atten(dy, dq)
-                #pair_att = soft(pair_att)
-                #print("check point 3 - a_h_for_q and pair_att size:", a_h_for_q.size(), pair_att.size())
-
-                #es_final = torch.cat((eh_for_a.squeeze(0), pair_att[-1]), dim=1)
-                #es_final = torch.cat((a_h_for_q, pair_att[-1]), dim = 1)
                 es_final = es_for_q
-
-            #print("check point 4 - es_final size:", es_final.size())
-
 
             #generate summary 
                 if hasattr(self.q_summary_decoder, 'context_to_state') \
@@ -318,9 +260,7 @@ class MMSeq2SeqModel(nn.Module):
         eh_temp, eh = self.history_encoder(None, hx)
         round_n = 0
 	lin_layer = nn.Linear(256,128).cuda()
-        # print('qa_id', qa_id)
-        # print('y_a and y_q', y_a, y_q)
-        #print('all_ai and all_qi', all_ai, all_qi)
+
         while qa_id < 11:
             #print('round_n', round_n)
             if qa_id < 9:
@@ -339,10 +279,6 @@ class MMSeq2SeqModel(nn.Module):
                         if temp_qi[ki] == 2:
                             qi_count += 1
                     qi = temp_qi[pos_s: pos_e]
-                    #print('qi', qi)
-                    # if (len(qi)< 1):
-                    #     qi = torch.tensor[[]]
-                    #     print("---------------------------------------------------")
                     seperate_qi.append(qi)
                             #break
                     for ki in range(len(temp_ai)):
@@ -353,26 +289,12 @@ class MMSeq2SeqModel(nn.Module):
                         if temp_ai[ki] == 2:
                             ai_count += 1
                     ai = temp_ai[pos_s: pos_e]
-                    # if len(ai) < 1:
-                    #     print('***************************************************')
+
                     seperate_ai.append(ai)
             else:
                 seperate_ai = y_a
                 seperate_qi = y_q
 
-            # print('y_a', len(y_a[0]), len(y_a[25]))
-            # print('seperate_ai', len(seperate_ai[0]), len(seperate_ai[25]))
-            # print('y_q', seperate_qi)
-            # print('y_a', seperate_ai)
-
-        # ##################################################################
-        # qa_id = len(hx)
-        # iter_count = 0
-
-        # # history embed for two agents
-        # eh_temp, eh = self.history_encoder(None, hx)
-
-        # while qa_id < 11:
         # ###########Q BOT##################################################
 
             if round_n == 0:
@@ -383,24 +305,16 @@ class MMSeq2SeqModel(nn.Module):
                 s_for_q = self.q_emb_s(s_for_q)
                 s_for_q = s_for_q.view(num_samples, -1, s_for_q.size(1), s_for_q.size(2)).transpose(2, 3)
 
-            # Multimodal attention
+            	# Multimodal attention
                 ei_for_q = self.q_atten(utils=[s_for_q[0], s_for_q[3], eh_temp], priors=[None, None, None])
 
-            # Prepare the decoder
+            	# Prepare the decoder
                 a_s_for_q = [ei_for_q[0], ei_for_q[1]]
                 a_a_s_for_q = torch.cat([u.unsqueeze(1) for u in a_s_for_q], dim=1)
                 _, hidden_temporal_state_for_q = self.q_emb_temporal_sp(a_a_s_for_q)
 
             ei_for_q = self.q_atten(utils=[s_for_q[0], s_for_q[3], eh_temp], priors=[None, None, None])
             es_for_q = ei_for_q[2]
-
-            #print('seperate_qi',seperate_qi)
-
-            #_, in_q, dq = self.q_question_decoder(hidden_temporal_state_for_q, es_for_q, seperate_qi)
-
-            #in_q_test = torch.argmax(in_q, dim=1)
-            #print('size check for q',in_q.size(), dq.size())
-            #print("in_q_test", in_q_test)
 
 	    ##################################################
 	    inq_ds = self.q_question_decoder.initialize(hidden_temporal_state_for_q, es_for_q, torch.from_numpy(np.asarray([sos])).cuda())
@@ -440,49 +354,28 @@ class MMSeq2SeqModel(nn.Module):
 		inq_hyplist = new_hyplist
 	    if len(inq_comp_hyplist) > 0:
 		inq_maxhyps = sorted(inq_comp_hyplist, key=lambda h: -h[1])[:nbest]
-		#print("internal q:", inq_best_state[1][1])
 		r_dq = inq_best_state[1][1]
 		r_dq = r_dq.cuda()
 		r_dq = lin_layer(r_dq)
-		#print("internal q:", r_dq.size(),type(r_dq))
-
-
-
-            #_, (r_dq,dc) = self.qalstm(dq.transpose(0,1))
-            #print('dq', r_dq.size())            
-
-        ###################################################################################
+		
         #################   A bot #####################
 
             if round_n == 0:
 
-                # # print("question embedding before attention:", ei.size())
-                # # print("question embedding example:", ei[0,:,:])
-                # q_prior = torch.zeros(ei.size(0), ei.size(1)).cuda()
-                # idx = torch.from_numpy(ei_len - 1).long().cuda()
-                # batch_index = torch.arange(0, ei_len.shape[0]).long().cuda()
-                # q_prior[batch_index, idx] = 1
 
                 # caption embed for A BOT
                 ei_c, ei_len_c = self.a_caption_encoder(None, c)
-                # print('ei_c:', ei_c.size())
-                # print('ei_len_c:', ei_len_c.size())
                 c_prior = torch.zeros(ei_c.size(0), ei_c.size(1)).cuda()
                 idx_c = torch.from_numpy(ei_len_c - 1).long().cuda()
                 batch_index_c = torch.arange(0, ei_len_c.shape[0]).long().cuda()
                 c_prior[batch_index_c, idx_c] = 1
-
-
+		
                 # visual input for A BOT
                 num_samples = s.shape[0]
                 s_for_a = s.view(-1, s.size(2), s.size(3)).transpose(1, 2)
-                # print("s shape 2:", s.size()) is (256 = 4*64 , 512, 49)
                 s_for_a = self.a_emb_s(s_for_a)
-                # print("s shape 3:", s.size()) is (256, 256, 49)
                 s_for_a = s_for_a.view(num_samples, -1, s_for_a.size(1), s_for_a.size(2)).transpose(2, 3)
-                 # print("visual embedding before attention:", s.size()) is (4, 64, 49, 256)
 
-                 # Audio input for A BOT
                 a = mx[0].cuda().permute(1, 2, 0)
                 a = self.a_emb_a(a)
                 a = a.transpose(1, 2)
@@ -490,18 +383,10 @@ class MMSeq2SeqModel(nn.Module):
                 # Multimodal attention
                 ei = self.a_atten(utils=[s_for_a[0], s_for_a[1], s_for_a[2], s_for_a[3], a, ei_c, eh_temp], priors=[None, None, None, None, None, c_prior, None])
 
-                #print("question embeding after attention:", a_q.size())
-                #a_s: attended embeddings for 4 visual frames
                 a_s_for_a = [ei[0], ei[1], ei[2], ei[3]]
-                #print("visual embedding after attention:", ei[1].size())
-                #a_a: attended audio embedding
                 a_a = ei[4]
-                #print("audio embedding after attention:", a_a.size())
                 a_c = ei[5]
-
                 a_h = ei[6]
-                #print("a_h and eh dim:", a_h.size(), eh.size())
-
                 a_a_s = torch.cat([a_a.unsqueeze(1)] + [u.unsqueeze(1) for u in a_s_for_a], dim=1)
                 _, hidden_temporal_state_for_a = self.a_emb_temporal_sp(a_a_s)
                 #eh_temp, eh = self.history_encoder(None, hx)
@@ -510,23 +395,8 @@ class MMSeq2SeqModel(nn.Module):
             a_c = ei[5]
             a_h = ei[6]
             es_for_a = torch.cat((a_c, a_h, r_dq.squeeze(0)), dim=1)
-        ## caption + his_with_att
-        #es = torch.cat((a_q, a_h[-1]), dim=1)
 
-        #generate answer dy for the given question
-        #print("check point 1 - es_for_a size:", es_for_a.size())
-            #print('seperate_ai', seperate_ai)
-            #if hasattr(self.a_response_decoder, 'context_to_state') \
-            #    and self.a_response_decoder.context_to_state==True:
-            #    _,  in_a, da = self.a_response_decoder(es_for_a, None, y_a) 
-            #else:
-            # decode
-            #    _, in_a, da = self.a_response_decoder(hidden_temporal_state_for_a, es_for_a, seperate_ai)
-
-            #print('size check for a', in_a.size(), da.size())
-            #in_a_test = torch.argmax(in_a, dim=1)
-            #print('es_for_a', es_for_a.size())
-	    ############################################################################
+            #generate answer for the given question
 	    ina_ds = self.a_response_decoder.initialize(hidden_temporal_state_for_a, es_for_a, torch.from_numpy(np.asarray([sos])).cuda())
 	    ina_hyplist = [([], 0., ina_ds)]
 	    ina_best_state = None
@@ -567,8 +437,6 @@ class MMSeq2SeqModel(nn.Module):
 		ina_maxhyps = sorted(ina_comp_hyplist, key=lambda h: -h[1])[:nbest]
 		r_da = ina_best_state[1][1].cuda()
 		r_da = lin_layer(r_da)
-		#print("internal a:", r_da.size()) 
-	
 
 
 ##################################################################################################################
@@ -576,30 +444,15 @@ class MMSeq2SeqModel(nn.Module):
 
             qa_id += 1
             round_n += 1
-            #print('hist', len(hx))
-            #print('eh_temp', eh_temp.size())
-            # print('dq', dq.size())
-            # print('da', da.size())
-            #r_p = torch.cat((dq,da), dim=1).transpose(0,1)
-            #_, (r_p, _) = self.qalstm(r_p)
 	    r_p = torch.cat((r_dq,r_da),dim=2)
 	    r_p = lin_layer(r_p)
-            #print('r_p', r_p.size())
-
             eh_temp = torch.cat((eh_temp, r_p.transpose(0,1)), dim=1)
 
 
         if qa_id == 11:
-                #pair_att = self.g_pair_atten(dy, dq)
-                #pair_att = soft(pair_att)
-                #print("check point 3 - a_h_for_q and pair_att size:", a_h_for_q.size(), pair_att.size())
-
-                #es_final = torch.cat((eh_for_a.squeeze(0), pair_att[-1]), dim=1)
-                #es_final = torch.cat((a_h_for_q, pair_att[-1]), dim = 1)
                 es_final = es_for_q
 
         # beam search
-        #print('es_final', es_final.size())
         ds = self.q_summary_decoder.initialize(hidden_temporal_state_for_q, es_final, torch.from_numpy(np.asarray([sos])).cuda())
         hyplist = [([], 0., ds)]
         best_state = None
