@@ -22,7 +22,7 @@ The audio-visual features can be downloaded [here](https://drive.google.com/file
 
 #### 4. Running the code and pre-trained models
 Use the command <code>./qa_run.sh</code> to run the codes.\
-The pretained model is available here.
+The pretained model is available [here](https://drive.google.com/file/d/1wsOlG9HxJSotPpOVpQ_CwnLAD5KY6f9k/view?usp=sharing).
 
 #### 5. Citation
 Please consider citing our paper if you find it interesting.
