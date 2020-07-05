@@ -1,8 +1,7 @@
 #!/usr/bin/env python
-"""Scene-aware Dialog Generation
+"""Video-Description-via-Dialog-Agents
    Adapted from 2018 Mitsubishi Electric Research Labs
-   Used in: A Simple Baseline for Audio-Visual Scene-Aware Dialog
-   https://arxiv.org/abs/1904.05876v1
+   Used in: Describing Unseen Videos via Multi-Modal Cooperative Dialog Agents
 """
 
 import argparse
@@ -45,16 +44,10 @@ def generate_response(model, data, batch_indices, vocab, maxlen=20, beam=5, pena
                 #print("qa_id and h len:",qa_id, len(h_batch))
 
                 if len(h_batch) < 12:
-
-                    #if vid == 'J662Y' and len(h_batch) == 7:
                         logging.info('%d' % (qa_id))
-                    #	logging.info('QS: ' + qa['question'])
                         logging.info('REF: ' + dialog['summary'])
                     # prepare input data
                         start_time = time.time()
-                    # x_batch, h_batch, q_batch, a_batch_in, a_batch_out, s_batch, summary_batch_in, summary_batch_out = \
-                    #     dh.make_batch(data, batch_indices[qa_id])
-                        #qa_id += 1
                         x = [torch.from_numpy(x) for x in x_batch]
                         h = [[torch.from_numpy(h) for h in hb] for hb in h_batch]
                         q = [torch.from_numpy(q) for q in q_batch]
@@ -68,13 +61,6 @@ def generate_response(model, data, batch_indices, vocab, maxlen=20, beam=5, pena
                         c = [torch.from_numpy(c) for c in c_batch]
                         all_ai = [torch.from_numpy(all_ai) for all_ai in all_a_batch_in]
                         all_qi = [torch.from_numpy(all_qi) for all_qi in all_q_batch_in]
-                        # print('all_ai', all_ai)
-                        # print('all_qi', all_qi)
-                        # #qi = [qi,qi]
-                        #print('qi:', qi)
-                        #print("h in generation:", len(h))
-                        # generate sequences
-                        #if vid == '76Z3W':
                         pred_out, _ = model.generate(x, h, q, c, s, ai, qi, all_ai, all_qi, maxlen=maxlen,
                                                 beam=beam, penalty=penalty, nbest=nbest)
                         for n in six.moves.range(min(nbest, len(pred_out))):
@@ -130,10 +116,6 @@ if __name__ =="__main__":
     path = args.model_conf
     with open(path, 'r') as f:
         vocab, train_args = pickle.load(f)
-
-    # file = open('vocab.txt','w')
-    # file.write(str(vocab))
-    # file.close()
 
     model = torch.load(args.model+'.pth.tar')
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
