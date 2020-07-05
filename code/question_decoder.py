@@ -60,13 +60,14 @@ class Question_HLSTMDecoder(nn.Module):
  
         """
 
-        if len(xs) >= 1:
+        if len(xs) > 1:
             sections = np.array([len(x) for x in xs], dtype=np.int32)
             aa = torch.cat(xs, 0)
             bb = self.embed(torch.tensor(aa, dtype=torch.long).cuda())
             cc = sections.tolist()
             hx = torch.split(bb, cc, dim=0)
         else:
+	    xs[0] = torch.tensor(xs[0], dtype=torch.long).cuda()
             hx = [self.embed(xs[0])]
             #print("hx_temp size:", hx_temp.size())
             #print(hs.shape, len(hx), [e.shape for e in hx])

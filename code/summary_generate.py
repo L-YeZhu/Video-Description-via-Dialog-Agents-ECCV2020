@@ -46,9 +46,9 @@ def generate_response(model, data, batch_indices, vocab, maxlen=20, beam=5, pena
 
                 if len(h_batch) < 12:
 
-                    if vid == 'J662Y' and len(h_batch) == 7:
-                        logging.info('%s' % (vid))
-                    #logging.info('QS: ' + qa['question'])
+                    #if vid == 'J662Y' and len(h_batch) == 7:
+                        logging.info('%d' % (qa_id))
+                    #	logging.info('QS: ' + qa['question'])
                         logging.info('REF: ' + dialog['summary'])
                     # prepare input data
                         start_time = time.time()

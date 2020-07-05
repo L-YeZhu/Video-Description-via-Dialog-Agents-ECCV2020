@@ -67,7 +67,7 @@ class HLSTMDecoder(nn.Module):
             cc = sections.tolist()
             hx = torch.split(bb, cc, dim=0)
         else:
-            sections = np.array([len(x) for x in xs], dtype=np.int32)
+            #sections = np.array([len(x) for x in xs], dtype=np.int32)
             xs[0] = torch.tensor(xs[0], dtype=torch.long).cuda()
             hx = [self.embed(xs[0])]
                 #print("hx_temp size:", hx_temp.size())

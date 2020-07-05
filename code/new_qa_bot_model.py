@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Dialog agents for Video Descriptions
+"""Dialog agents for AVSD
 """
 
 import sys
@@ -51,6 +51,7 @@ class MMSeq2SeqModel(nn.Module):
         self.qalstm = nn.LSTM(128,128)
         #self.plstm = nn.LSTM(256,128)
 
+        #self.atten = NaiveAttention()
         self.a_atten = Atten(util_e=[self.s_embed, self.s_embed,self.s_embed, self.s_embed, self.a_embed, self.c_embed, self.h_embed], high_order_utils=high_order_utils,
                            prior_flag=True, sizes=[49, 49, 49, 49, 10, 10, 10], size_flag=False, pairwise_flag=True, unary_flag=True, self_flag=True)
         self.q_atten = Atten(util_e=[self.s_embed, self.s_embed, self.h_embed], high_order_utils=high_order_utils,
@@ -74,7 +75,7 @@ class MMSeq2SeqModel(nn.Module):
 
         ###################################################################
         qa_id = len(hx)
-        remian_len = 10 - len(hx)
+        remain_len = 10 - len(hx)
         eh_temp, eh = self.history_encoder(None, hx)
         round_n = 0
         while qa_id < 11:
@@ -115,6 +116,11 @@ class MMSeq2SeqModel(nn.Module):
             else:
                 seperate_ai = y_a
                 seperate_qi = y_q
+
+            # print('y_a', len(y_a[0]), len(y_a[25]))
+            # print('seperate_ai', len(seperate_ai[0]), len(seperate_ai[25]))
+            # print('y_q', seperate_qi[6])
+            # print('y_a', seperate_ai[6])
 
         # ##################################################################
         # qa_id = len(hx)
@@ -241,8 +247,13 @@ class MMSeq2SeqModel(nn.Module):
 
             qa_id += 1
             round_n += 1
+            # print('history len', len(hx))
+            # print('eh_temp', eh_temp.size())
+            # print('dq', dq.size())
+            # print('da', da.size())
             r_p = torch.cat((dq,da), dim=1).transpose(0,1)
             _, (r_p, _) = self.qalstm(r_p)
+            # print('r_p', r_p.size())
 
             eh_temp = torch.cat((eh_temp, r_p.transpose(0,1)), dim=1)
 
@@ -303,9 +314,10 @@ class MMSeq2SeqModel(nn.Module):
 
 
         qa_id = len(hx)
-        remian_len = 10 - len(hx)
+        remain_len = 10 - len(hx)
         eh_temp, eh = self.history_encoder(None, hx)
         round_n = 0
+	lin_layer = nn.Linear(256,128).cuda()
         # print('qa_id', qa_id)
         # print('y_a and y_q', y_a, y_q)
         #print('all_ai and all_qi', all_ai, all_qi)
@@ -384,14 +396,59 @@ class MMSeq2SeqModel(nn.Module):
 
             #print('seperate_qi',seperate_qi)
 
-            _, in_q, dq = self.q_question_decoder(hidden_temporal_state_for_q, es_for_q, seperate_qi)
+            #_, in_q, dq = self.q_question_decoder(hidden_temporal_state_for_q, es_for_q, seperate_qi)
 
-            in_q_test = torch.argmax(in_q, dim=1)
+            #in_q_test = torch.argmax(in_q, dim=1)
+            #print('size check for q',in_q.size(), dq.size())
+            #print("in_q_test", in_q_test)
 
-            #print('in_q', in_q.size())
-            print("in_q_test", in_q_test)
+	    ##################################################
+	    inq_ds = self.q_question_decoder.initialize(hidden_temporal_state_for_q, es_for_q, torch.from_numpy(np.asarray([sos])).cuda())
+	    inq_hyplist = [([], 0., inq_ds)]
+	    inq_best_state = None
+	    inq_comp_hyplist = []
+	    for l in six.moves.range(maxlen):
+		new_hyplist = []
+		argmin = 0
+		for out, lp, st in inq_hyplist:
+		    logp = self.q_question_decoder.predict(st)
+		    lp_vec = logp.cpu().data.numpy() + lp
+		    lp_vec = np.squeeze(lp_vec)
+		    if l >= minlen:
+			new_lp = lp_vec[eos] + penalty * (len(out) + 1)
+			new_st = self.q_question_decoder.update(st, torch.from_numpy(np.asarray([eos])).cuda())
+			inq_comp_hyplist.append((out, new_lp))
+			if inq_best_state is None or inq_best_state[0] < new_lp:
+			    inq_best_state = (new_lp, new_st)
 
-            _, (r_dq,dc) = self.qalstm(dq.transpose(0,1))
+		    for o in np.argsort(lp_vec)[::-1]:
+			if o == unk or o == eos:
+			    continue
+			new_lp = lp_vec[o]
+			if len(new_hyplist) == 1:
+			    if new_hyplist[argmin][1] < new_lp:
+				new_st = self.q_question_decoder.update(st, torch.from_numpy(np.asarray([o])).cuda())
+				new_hyplist[argmin] = (out + [o], new_lp, new_st)
+				argmin = min(enumerate(new_hyplist), key=lambda h: h[1][1])[0]
+			    else:
+				break
+			else:
+			    new_st = self.q_question_decoder.update(st, torch.from_numpy(np.asarray([o])).cuda())
+			    new_hyplist.append((out + [o], new_lp, new_st))
+			    if len(new_hyplist) == 1:
+				argmin = min(enumerate(new_hyplist), key=lambda h: h[1][1])[0]
+		inq_hyplist = new_hyplist
+	    if len(inq_comp_hyplist) > 0:
+		inq_maxhyps = sorted(inq_comp_hyplist, key=lambda h: -h[1])[:nbest]
+		#print("internal q:", inq_best_state[1][1])
+		r_dq = inq_best_state[1][1]
+		r_dq = r_dq.cuda()
+		r_dq = lin_layer(r_dq)
+		#print("internal q:", r_dq.size(),type(r_dq))
+
+
+
+            #_, (r_dq,dc) = self.qalstm(dq.transpose(0,1))
             #print('dq', r_dq.size())            
 
         ###################################################################################
@@ -459,16 +516,59 @@ class MMSeq2SeqModel(nn.Module):
         #generate answer dy for the given question
         #print("check point 1 - es_for_a size:", es_for_a.size())
             #print('seperate_ai', seperate_ai)
-            if hasattr(self.a_response_decoder, 'context_to_state') \
-                and self.a_response_decoder.context_to_state==True:
-                _,  in_a, da = self.a_response_decoder(es_for_a, None, y_a) 
-            else:
+            #if hasattr(self.a_response_decoder, 'context_to_state') \
+            #    and self.a_response_decoder.context_to_state==True:
+            #    _,  in_a, da = self.a_response_decoder(es_for_a, None, y_a) 
+            #else:
             # decode
-                _, in_a, da = self.a_response_decoder(hidden_temporal_state_for_a, es_for_a, seperate_ai)
+            #    _, in_a, da = self.a_response_decoder(hidden_temporal_state_for_a, es_for_a, seperate_ai)
 
-            #print('in_a', in_a.size())
-            in_a_test = torch.argmax(in_a, dim=1)
-            print('in_a_test', in_a_test)
+            #print('size check for a', in_a.size(), da.size())
+            #in_a_test = torch.argmax(in_a, dim=1)
+            #print('es_for_a', es_for_a.size())
+	    ############################################################################
+	    ina_ds = self.a_response_decoder.initialize(hidden_temporal_state_for_a, es_for_a, torch.from_numpy(np.asarray([sos])).cuda())
+	    ina_hyplist = [([], 0., ina_ds)]
+	    ina_best_state = None
+	    ina_comp_hyplist = []
+	    for l in six.moves.range(maxlen):
+		new_hyplist = []
+		argmin = 0
+		for out, lp, st in ina_hyplist:
+		    logp = self.a_response_decoder.predict(st)
+		    lp_vec = logp.cpu().data.numpy() + lp
+		    lp_vec = np.squeeze(lp_vec)
+		    if l >= minlen:
+			new_lp = lp_vec[eos] + penalty * (len(out) + 1) 
+			new_st = self.a_response_decoder.update(st, torch.from_numpy(np.asarray([eos])).cuda())
+			ina_comp_hyplist.append((out, new_lp))
+			if ina_best_state is None or ina_best_state[0] < new_lp:
+			    ina_best_state = (new_lp, new_st)
+
+		    for o in np.argsort(lp_vec)[::-1]:
+			if o == unk or o == eos:
+			    continue
+			new_lp = lp_vec[o]
+			if len(new_hyplist) == 1:
+			    if new_hyplist[argmin][1] < new_lp:
+				new_st = self.a_response_decoder.update(st, torch.from_numpy(np.asarray([o])).cuda())
+				new_hyplist[argmin] = (out + [o], new_lp, new_st)
+				argmin = min(enumerate(new_hyplist), key=lambda h: h[1][1])[0]
+			    else:
+				break
+			else:
+			    new_st = self.a_response_decoder.update(st, torch.from_numpy(np.asarray([o])).cuda())
+			    new_hyplist.append((out + [o], new_lp, new_st))
+			    if len(new_hyplist) == 1:
+				argmin = min(enumerate(new_hyplist), key=lambda h: h[1][1])[0]
+
+		ina_hyplist = new_hyplist
+	    if len(ina_comp_hyplist) > 0:
+		ina_maxhyps = sorted(ina_comp_hyplist, key=lambda h: -h[1])[:nbest]
+		r_da = ina_best_state[1][1].cuda()
+		r_da = lin_layer(r_da)
+		#print("internal a:", r_da.size()) 
+	
 
 
 ##################################################################################################################
@@ -476,13 +576,15 @@ class MMSeq2SeqModel(nn.Module):
 
             qa_id += 1
             round_n += 1
-            # print('history len', len(hx))
-            # print('eh_temp', eh_temp.size())
+            #print('hist', len(hx))
+            #print('eh_temp', eh_temp.size())
             # print('dq', dq.size())
             # print('da', da.size())
-            r_p = torch.cat((dq,da), dim=1).transpose(0,1)
-            _, (r_p, _) = self.qalstm(r_p)
-            # print('r_p', r_p.size())
+            #r_p = torch.cat((dq,da), dim=1).transpose(0,1)
+            #_, (r_p, _) = self.qalstm(r_p)
+	    r_p = torch.cat((r_dq,r_da),dim=2)
+	    r_p = lin_layer(r_p)
+            #print('r_p', r_p.size())
 
             eh_temp = torch.cat((eh_temp, r_p.transpose(0,1)), dim=1)
 
@@ -537,6 +639,7 @@ class MMSeq2SeqModel(nn.Module):
 
         if len(comp_hyplist) > 0:
             maxhyps = sorted(comp_hyplist, key=lambda h: -h[1])[:nbest]
+	    #print("best_state:", best_state[1][1].size())
             return maxhyps, best_state[1]
         else:
             return [([], 0)], None
