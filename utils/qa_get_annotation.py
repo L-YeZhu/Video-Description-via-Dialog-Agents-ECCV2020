@@ -52,8 +52,6 @@ for dialog in dialogs['dialogs']:
     if  dictmap is not None:
         vid = dictmap[vid]
     for n, qa in enumerate(dialog['dialog']):
-        #print("n count:", n)
-         #   print("n num in annos:", n)
         if args.last==False or n==len(dialog['dialog'])-1:
             idx = '%s_%d' % (vid, n)
             #sent = dialog['dialog']['summary']
