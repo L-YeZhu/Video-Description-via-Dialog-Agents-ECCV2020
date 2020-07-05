@@ -20,7 +20,7 @@ The original AVSD dataset used in our experiments can be found [here](https://gi
 The annotations can be downloaded [here](https://drive.google.com/file/d/1CWXNeXsxz8UelosF8XWU9bNLFkUON2J3/view?usp=sharing). Please extract to ‘data/’.\
 The audio-visual features can be downloaded [here](https://drive.google.com/file/d/15KwizowgEtUJKESDOGEICutHrqiXFQ5e/view?usp=sharing). Please extract to ‘data/charades_features’.
 
-#### 4. Running the code
+#### 4. Running the code and pre-trained models
 Use the command <code>./qa_run.sh</code> to run the codes.\
 The pretained model is available here.
 
