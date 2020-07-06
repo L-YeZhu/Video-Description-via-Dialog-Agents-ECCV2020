@@ -18,10 +18,10 @@ cocoEval.params['image_id'] = cocoRes.getImgIds()
 # evaluate results
 cocoEval.evaluate()
 # print output evaluation scores
-email_msg = ""
+# email_msg = ""
 for metric, score in cocoEval.eval.items():
     print '%s: %.3f' % (metric, score)
-    email_msg += '%s: %.3f\n' % (metric, score)
+    # email_msg += '%s: %.3f\n' % (metric, score)
 for key, value in cocoEval.imgToEval.iteritems():
     print key, value
 
