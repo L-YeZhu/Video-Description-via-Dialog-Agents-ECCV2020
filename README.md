@@ -25,7 +25,7 @@ Use the command <code>./qa_run.sh</code> to run the codes.\
 The pretained model is available [here](https://drive.google.com/file/d/1wsOlG9HxJSotPpOVpQ_CwnLAD5KY6f9k/view?usp=sharing).
 
 #### 5. Citation
-Please consider citing our paper if you find it interesting.
+Please consider citing our paper if you find it useful.
 ```
 @InProceedings{yzhu2018describing,    
   author = {Zhu, Ye and Wu, Yu and Yang, Yi and Yan, Yan},    
