@@ -22,7 +22,7 @@ The audio-visual features can be downloaded [here](https://drive.google.com/file
 
 #### 4. Running the code and pre-trained models
 Use the command <code>./qa_run.sh</code> to run the codes.\
-The codes are running under 4 different stages: evaluation tool prepration, training, inference and scores calculating. Note that to compute the SPICE scores, please follow the instructions from the [coco-pation project](https://github.com/tylin/coco-caption). 
+The codes are running under 4 different stages: evaluation tool prepration, training, inference and scores calculating. Note that to compute the SPICE scores, please follow the instructions from the [coco-pation project](https://github.com/tylin/coco-caption). \
 The pretained model is available [here](https://drive.google.com/file/d/1wHow about the asOlG9HxJSotPpOVpQ_CwnLAD5KY6f9k/view?usp=sharing).
 
 #### 5. Citation
