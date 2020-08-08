@@ -28,7 +28,7 @@ The pretained model is available [here](https://drive.google.com/file/d/1wsOlG9H
 #### 5. Citation
 Please consider citing our paper if you find it useful.
 ```
-@InProceedings{yzhu2018describing,    
+@InProceedings{yzhu2020describing,    
   author = {Zhu, Ye and Wu, Yu and Yang, Yi and Yan, Yan},    
   title = {Describing Unseen Videos via Multi-Modal Cooperative Dialog Agents},    
   booktitle = {The European Conference on Computer Vision (ECCV)},    
