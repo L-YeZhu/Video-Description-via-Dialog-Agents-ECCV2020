@@ -1,5 +1,5 @@
 ## Describing Unseen Videos via Multi-Modal Cooperative Dialog Agents - ECCV 2020
-This repository is the implementation for the video description task introduced in the paper Describing Unseen Videos via Multi-Modal Cooperative Dialog Agents. Our codes are based on [AudioVisualSceneAwareDialog(Hori et. al.)](https://github.com/dialogtekgeek/AudioVisualSceneAwareDialog) and [Baseline on AVSD(Schwartz et. al.)](https://github.com/idansc/simple-avsd), we thank the authors of the previous work to share their data and codes.
+This repository is the implementation for the video description task introduced in the paper [Describing Unseen Videos via Multi-Modal Cooperative Dialog Agents](https://arxiv.org/pdf/2008.07935.pdf). Our codes are based on [AudioVisualSceneAwareDialog(Hori et. al.)](https://github.com/dialogtekgeek/AudioVisualSceneAwareDialog) and [Baseline on AVSD(Schwartz et. al.)](https://github.com/idansc/simple-avsd), we thank the authors of the previous work to share their data and codes.
 
 #### 1. Introduction of the task
 We introduce a task whose ultimate goal is for one coversational agent to describe an unseen video based on the dialog and two static frames from the video as shown below.
